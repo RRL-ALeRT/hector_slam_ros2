@@ -27,56 +27,64 @@
 //=================================================================================================
 
 
-#include "ros/ros.h"
-#include "tf/transform_broadcaster.h"
-#include "sensor_msgs/Imu.h"
+#include "rclcpp/rclcpp.hpp"
+#include "tf2_ros/transform_broadcaster.h"
+#include "geometry_msgs/msg/transform_stamped.hpp"
+#include "sensor_msgs/msg/imu.hpp"
+#include "tf2/utils.h"
 
+rclcpp::Node::SharedPtr node;
 std::string p_base_stabilized_frame_;
 std::string p_base_frame_;
-tf::TransformBroadcaster* tfB_;
-tf::StampedTransform transform_;
-tf::Quaternion tmp_;
+tf2_ros::TransformBroadcaster* tfB_;
+geometry_msgs::msg::TransformStamped transform_;
 
-#ifndef TF_MATRIX3x3_H
-  typedef btScalar tfScalar;
-  namespace tf { typedef btMatrix3x3 Matrix3x3; }
-#endif
+// #ifndef TF_MATRIX3x3_H
+//   typedef btScalar tf2Scalar;
+//   namespace tf { typedef btMatrix3x3 Matrix3x3; }
+// #endif skpawar1305
 
-void imuMsgCallback(const sensor_msgs::Imu& imu_msg)
+void imuMsgCallback(const sensor_msgs::msg::Imu& imu_msg)
 {
-  tf::quaternionMsgToTF(imu_msg.orientation, tmp_);
+  tf2::Quaternion tmp_(
+    imu_msg.orientation.x,
+    imu_msg.orientation.y,
+    imu_msg.orientation.z,
+    imu_msg.orientation.w);
 
-  tfScalar yaw, pitch, roll;
-  tf::Matrix3x3(tmp_).getRPY(roll, pitch, yaw);
+  tf2Scalar yaw, pitch, roll;
+  tf2::Matrix3x3(tmp_).getRPY(roll, pitch, yaw);
 
   tmp_.setRPY(roll, pitch, 0.0);
 
-  transform_.setRotation(tmp_);
+  transform_.transform.rotation.x = tmp_.x();
+  transform_.transform.rotation.y = tmp_.y();
+  transform_.transform.rotation.z = tmp_.z();
+  transform_.transform.rotation.w = tmp_.w();
 
-  transform_.stamp_ = imu_msg.header.stamp;
+  transform_.header.stamp = imu_msg.header.stamp;
 
   tfB_->sendTransform(transform_);
 }
 
 int main(int argc, char **argv) {
-  ros::init(argc, argv, ROS_PACKAGE_NAME);
+  rclcpp::init(argc, argv);
 
-  ros::NodeHandle n;
-  ros::NodeHandle pn("~");
+  node = std::make_shared<rclcpp::Node>("imu_attitude_to_tf_node");
 
-  pn.param("base_stabilized_frame", p_base_stabilized_frame_, std::string("base_stabilized"));
-  pn.param("base_frame", p_base_frame_, std::string("base_link"));
+  p_base_stabilized_frame_ = node->declare_parameter("base_stabilized_frame", "base_stabilized");
+  p_base_frame_ = node->declare_parameter("base_frame", "base_link");
   
-  tfB_ = new tf::TransformBroadcaster();
-  transform_.getOrigin().setX(0.0);
-  transform_.getOrigin().setY(0.0);
-  transform_.getOrigin().setZ(0.0);
-  transform_.frame_id_ = p_base_stabilized_frame_;
-  transform_.child_frame_id_ = p_base_frame_;
+  tfB_ = new tf2_ros::TransformBroadcaster(node);
+  transform_.transform.translation.x = 0.0;
+  transform_.transform.translation.y = 0.0;
+  transform_.transform.translation.z = 0.0;
+  transform_.header.frame_id = p_base_stabilized_frame_;
+  transform_.child_frame_id = p_base_frame_;
 
-  ros::Subscriber imu_subscriber = n.subscribe("imu_topic", 10, imuMsgCallback);
+  auto imu_subscriber = node->create_subscription<sensor_msgs::msg::Imu>("imu_topic", 10, imuMsgCallback);
 
-  ros::spin();
+  rclcpp::spin(node);
 
   delete tfB_;
 

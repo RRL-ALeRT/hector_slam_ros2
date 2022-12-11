@@ -26,38 +26,44 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //=================================================================================================
 
-#include "ros/ros.h"
+#include "rclcpp/rclcpp.hpp"
 
-#include <nav_msgs/GetMap.h>
-#include <geometry_msgs/Quaternion.h>
-#include <geometry_msgs/PoseStamped.h>
-#include <sensor_msgs/image_encodings.h>
+#include <nav_msgs/srv/get_map.hpp>
+#include <geometry_msgs/msg/quaternion.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <sensor_msgs/image_encodings.hpp>
 
 #include <cv_bridge/cv_bridge.h>
-#include <image_transport/image_transport.h>
+#include <image_transport/image_transport.hpp>
 #include <Eigen/Geometry>
 
 #include <hector_map_tools/HectorMapTools.h>
 
 using namespace std;
 
+using std::placeholders::_1;
+
 /**
  * @brief This node provides occupancy grid maps as images via image_transport, so the transmission consumes less bandwidth.
  * The provided code is a incomplete proof of concept.
  */
-class MapAsImageProvider
+class MapAsImageProvider : public rclcpp::Node
 {
+protected:
+  rclcpp::Node::SharedPtr node_handle_;
 public:
   MapAsImageProvider()
-    : pn_("~")
+    : Node("map_to_image_node"),
+      node_handle_(std::shared_ptr<MapAsImageProvider>(this, [](auto *) {}))
   {
+    image_transport::ImageTransport image_transport_(node_handle_);
+    image_transport_publisher_full_ = image_transport_.advertise("map_image/full", 1);
+    image_transport_publisher_tile_ = image_transport_.advertise("map_image/tile", 1);
 
-    image_transport_ = new image_transport::ImageTransport(n_);
-    image_transport_publisher_full_ = image_transport_->advertise("map_image/full", 1);
-    image_transport_publisher_tile_ = image_transport_->advertise("map_image/tile", 1);
-
-    pose_sub_ = n_.subscribe("pose", 1, &MapAsImageProvider::poseCallback, this);
-    map_sub_ = n_.subscribe("map", 1, &MapAsImageProvider::mapCallback, this);
+    auto pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
+      "pose", 1, std::bind(&MapAsImageProvider::poseCallback, this, _1));
+    auto map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
+      "map", 1, std::bind(&MapAsImageProvider::mapCallback, this, _1));
 
     //Which frame_id makes sense?
     cv_img_full_.header.frame_id = "map_image";
@@ -70,7 +76,7 @@ public:
     p_size_tiled_map_image_x_ = 64;
     p_size_tiled_map_image_y_ = 64;
 
-    ROS_INFO("Map to Image node started.");
+    // ROS_INFO("Map to Image node started.");
   }
 
   ~MapAsImageProvider()
@@ -79,19 +85,19 @@ public:
   }
 
   //We assume the robot position is available as a PoseStamped here (querying tf would be the more general option)
-  void poseCallback(const geometry_msgs::PoseStampedConstPtr& pose)
+  void poseCallback(const geometry_msgs::msg::PoseStamped::ConstPtr& pose)
   {
     pose_ptr_ = pose;
   }
 
   //The map->image conversion runs every time a new map is received at the moment
-  void mapCallback(const nav_msgs::OccupancyGridConstPtr& map)
+  void mapCallback(const nav_msgs::msg::OccupancyGrid::ConstPtr& map)
   {
     int size_x = map->info.width;
     int size_y = map->info.height;
 
     if ((size_x < 3) || (size_y < 3) ){
-      ROS_INFO("Map size is only x: %d,  y: %d . Not running map to image conversion", size_x, size_y);
+      // ROS_INFO("Map size is only x: %d,  y: %d . Not running map to image conversion", size_x, size_y);
       return;
     }
 
@@ -235,36 +241,36 @@ public:
     }
   }
 
-  ros::Subscriber map_sub_;
-  ros::Subscriber pose_sub_;
+  rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
 
   image_transport::Publisher image_transport_publisher_full_;
   image_transport::Publisher image_transport_publisher_tile_;
 
   image_transport::ImageTransport* image_transport_;
 
-  geometry_msgs::PoseStampedConstPtr pose_ptr_;
+  geometry_msgs::msg::PoseStamped::ConstPtr pose_ptr_;
 
   cv_bridge::CvImage cv_img_full_;
   cv_bridge::CvImage cv_img_tile_;
 
-  ros::NodeHandle n_;
-  ros::NodeHandle pn_;
+  // rclcpp::NodeHandle n_;
+  // rclcpp::NodeHandle pn_;
 
   int p_size_tiled_map_image_x_;
   int p_size_tiled_map_image_y_;
 
   HectorMapTools::CoordinateTransformer<float> world_map_transformer_;
-
 };
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "map_to_image_node");
+  rclcpp::init(argc, argv);
+  
+  rclcpp::spin(std::make_shared<MapAsImageProvider>());
 
-  MapAsImageProvider map_image_provider;
-
-  ros::spin();
+  // MapAsImageProvider map_image_provider;
+  rclcpp::shutdown();
 
   return 0;
 }

@@ -29,25 +29,27 @@
 #ifndef POSE_INFO_CONTAINER_H__
 #define POSE_INFO_CONTAINER_H__
 
-#include <tf/transform_datatypes.h>
-#include <geometry_msgs/PoseStamped.h>
-#include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include "rclcpp/rclcpp.hpp"
+#include "tf2/transform_datatypes.h"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
+#include "geometry_msgs/msg/transform_stamped.hpp"
 
 #include <Eigen/Core>
 
 class PoseInfoContainer{
 public:
 
-  void update(const Eigen::Vector3f& slamPose, const Eigen::Matrix3f& slamCov, const ros::Time& stamp, const std::string& frame_id);
+  void update(const Eigen::Vector3f& slamPose, const Eigen::Matrix3f& slamCov, const rclcpp::Time& stamp, const std::string& frame_id);
 
-  const geometry_msgs::PoseStamped& getPoseStamped() { return stampedPose_; };
-  const geometry_msgs::PoseWithCovarianceStamped& getPoseWithCovarianceStamped() { return covPose_; };
-  const tf::Transform& getTfTransform() { return poseTransform_; };
+  const geometry_msgs::msg::PoseStamped& getPoseStamped() { return stampedPose_; };
+  const geometry_msgs::msg::PoseWithCovarianceStamped& getPoseWithCovarianceStamped() { return covPose_; };
+  const geometry_msgs::msg::TransformStamped& getTfTransform() { return poseTransform_; };
 
 protected:
-  geometry_msgs::PoseStamped stampedPose_;
-  geometry_msgs::PoseWithCovarianceStamped covPose_;
-  tf::Transform poseTransform_;
+  geometry_msgs::msg::PoseStamped stampedPose_;
+  geometry_msgs::msg::PoseWithCovarianceStamped covPose_;
+  geometry_msgs::msg::TransformStamped poseTransform_;
 
 };
 

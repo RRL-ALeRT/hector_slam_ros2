@@ -27,15 +27,16 @@
 //=================================================================================================
 
 #include "PoseInfoContainer.h"
+// #include "boost/array.hpp"
 
-void PoseInfoContainer::update(const Eigen::Vector3f& slamPose, const Eigen::Matrix3f& slamCov, const ros::Time& stamp, const std::string& frame_id)
+void PoseInfoContainer::update(const Eigen::Vector3f& slamPose, const Eigen::Matrix3f& slamCov, const rclcpp::Time& stamp, const std::string& frame_id)
 {
   //Fill stampedPose
-  std_msgs::Header& header = stampedPose_.header;
+  std_msgs::msg::Header& header = stampedPose_.header;
   header.stamp = stamp;
   header.frame_id = frame_id;
 
-  geometry_msgs::Pose& pose = stampedPose_.pose;
+  geometry_msgs::msg::Pose& pose = stampedPose_.pose;
   pose.position.x = slamPose.x();
   pose.position.y = slamPose.y();
 
@@ -47,24 +48,30 @@ void PoseInfoContainer::update(const Eigen::Vector3f& slamPose, const Eigen::Mat
   covPose_.header = header;
   covPose_.pose.pose = pose;
 
-  boost::array<double, 36>& cov(covPose_.pose.covariance);
+  // boost::array<double, 36>& cov(covPose_.pose.covariance);
 
-  cov[0] = static_cast<double>(slamCov(0,0));
-  cov[7] = static_cast<double>(slamCov(1,1));
-  cov[35] = static_cast<double>(slamCov(2,2));
+  covPose_.pose.covariance[0] = static_cast<double>(slamCov(0,0));
+  covPose_.pose.covariance[7] = static_cast<double>(slamCov(1,1));
+  covPose_.pose.covariance[35] = static_cast<double>(slamCov(2,2));
 
   double xyC = static_cast<double>(slamCov(0,1));
-  cov[1] = xyC;
-  cov[6] = xyC;
+  covPose_.pose.covariance[1] = xyC;
+  covPose_.pose.covariance[6] = xyC;
 
   double xaC = static_cast<double>(slamCov(0,2));
-  cov[5] = xaC;
-  cov[30] = xaC;
+  covPose_.pose.covariance[5] = xaC;
+  covPose_.pose.covariance[30] = xaC;
 
   double yaC = static_cast<double>(slamCov(1,2));
-  cov[11] = yaC;
-  cov[31] = yaC;
+  covPose_.pose.covariance[11] = yaC;
+  covPose_.pose.covariance[31] = yaC;
 
   //Fill tf tansform
-  tf::poseMsgToTF(pose, poseTransform_);
+  // tf2::poseMsgToTF(pose, poseTransform_);
+  poseTransform_.header = header;
+  poseTransform_.transform.translation.x = pose.position.x;
+  poseTransform_.transform.translation.y = pose.position.y;
+  poseTransform_.transform.translation.z = pose.position.z;
+  poseTransform_.transform.rotation.w = pose.orientation.w;
+  poseTransform_.transform.rotation.z = pose.orientation.z;
 }

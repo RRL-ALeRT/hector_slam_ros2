@@ -29,93 +29,100 @@
 #include "hector_geotiff/geotiff_writer.h"
 
 #include <cstdio>
-#include <ros/ros.h>
-#include <ros/console.h>
+#include <rclcpp/rclcpp.hpp>
 
-#include <nav_msgs/GetMap.h>
+#include <nav_msgs/srv/get_map.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 #include <QApplication>
 
 using namespace std;
+using std::placeholders::_1;
 
-namespace hector_geotiff{
 
-/**
- * @brief Map generation node.
- */
-class MapGenerator
+class GeotiffSaver
 {
   public:
-    MapGenerator(const std::string& mapname) : mapname_(mapname)
-    {
-      ros::NodeHandle n;
-      ROS_INFO("Waiting for the map");
-      map_sub_ = n.subscribe("map", 1, &MapGenerator::mapCallback, this);
+    GeotiffSaver(rclcpp::Node::SharedPtr node, string map_name) : node_(node), map_name_(map_name) {
+      path_sub_ = node_->create_subscription<visualization_msgs::msg::MarkerArray>(
+        "/slam_toolbox/graph_visualization", 1, std::bind(&GeotiffSaver::pathCallback, this, _1));
+
+      map_sub_ = node_->create_subscription<nav_msgs::msg::OccupancyGrid>(
+        "map", 1, std::bind(&GeotiffSaver::mapCallback, this, _1));
     }
 
-    void mapCallback(const nav_msgs::OccupancyGridConstPtr& map)
+  private:
+    void pathCallback(const visualization_msgs::msg::MarkerArray::SharedPtr path)
     {
-      ros::Time start_time (ros::Time::now());
+      auto marker_array = path->markers;
+      int num_markers = marker_array.size();
+      for (int i = 0; i < num_markers; i++) {
+        auto num_points = marker_array[i].points.size();
 
-      geotiff_writer.setMapFileName(mapname_);
-      geotiff_writer.setupTransforms(*map);
-      geotiff_writer.drawBackgroundCheckerboard();
-      geotiff_writer.drawMap(*map);
-      geotiff_writer.drawCoords();
+        if (marker_array[i].ns == "slam_toolbox_edges" && num_points > 0) {
+          startVec[0] = marker_array[i].points[0].x;
+          startVec[1] = marker_array[i].points[0].y;
 
-      geotiff_writer.writeGeotiffImage(true);
+          pointVec.resize(num_points);
+          for (long unsigned int j = 0; j < num_points; j++) {
+            pointVec[j] = Eigen::Vector2f(marker_array[i].points[j].x, marker_array[i].points[j].y);
+          }
 
-      ros::Duration elapsed_time (ros::Time::now() - start_time);
-      ROS_INFO("GeoTiff created in %f seconds", elapsed_time.toSec());
-    }
+          RCLCPP_INFO(node_->get_logger(), "Path loaded.");
+          path_loaded = true;
 
-    GeotiffWriter geotiff_writer;
+          if (map_loaded)
+            saveMap ();
+        }
+      }
+    };
 
-    std::string mapname_;
-    ros::Subscriber map_sub_;
+    void mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr map_msg)
+    {
+      map = *map_msg;
+      map_loaded = true;
+      if (path_loaded)
+        saveMap ();
+    };
+
+    void saveMap () {
+        RCLCPP_INFO(node_->get_logger(), "Map loaded.");
+        hector_geotiff::GeotiffWriter geotiff_writer(false);
+
+        geotiff_writer.setMapFileName(map_name_);
+        geotiff_writer.setupTransforms(map);
+        geotiff_writer.setupImageSize();
+        geotiff_writer.drawBackgroundCheckerboard();
+        geotiff_writer.drawMap(map);
+        geotiff_writer.drawCoords();
+        geotiff_writer.drawPath(startVec, pointVec);
+
+        geotiff_writer.writeGeotiffImage(true);
+        rclcpp::shutdown();
+    };
+
+    rclcpp::Node::SharedPtr node_;
+    rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr path_sub_;
+    rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
+
+    nav_msgs::msg::OccupancyGrid map;
+    Eigen::Vector3f startVec;
+    std::vector<Eigen::Vector2f> pointVec;
+
+    string map_name_ = "";
+    bool map_loaded = false;
+    bool path_loaded = false;
 };
-
-}
-
-#define USAGE "Usage: \n" \
-              "  geotiff_saver -h\n"\
-              "  geotiff_saver [-f <mapname>] [ROS remapping args]"
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "map_saver");
-  std::string mapname = "map";
+  rclcpp::init(argc, argv);
+  rclcpp::Node::SharedPtr node = std::make_shared<rclcpp::Node>("geotiff_saver");
 
-  for(int i=1; i<argc; i++)
-  {
-    if(!strcmp(argv[i], "-h"))
-    {
-      puts(USAGE);
-      return 0;
-    }
-    else if(!strcmp(argv[i], "-f"))
-    {
-      if(++i < argc)
-        mapname = argv[i];
-      else
-      {
-        puts(USAGE);
-        return 1;
-      }
-    }
-    else
-    {
-      puts(USAGE);
-      return 1;
-    }
-  }
+  string map_name = "RoboCup2023-FHAachen-Mission1";
 
-  //GeotiffWriter geotiff_writer;
-  //geotiff_writer.setMapName("test");
-  hector_geotiff::MapGenerator mg(mapname);
-
-  ros::spin();
-
+  GeotiffSaver gs(node, map_name);
+  rclcpp::spin(node);
+  rclcpp::shutdown();
   return 0;
 }
-

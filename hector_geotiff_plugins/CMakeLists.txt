@@ -1,44 +1,49 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.8)
 project(hector_geotiff_plugins)
 
-find_package(catkin REQUIRED COMPONENTS hector_geotiff hector_nav_msgs)
+set(CMAKE_CXX_STANDARD 14)
 
+# Default to C++14
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
+endif()
 
-###################################
-## catkin specific configuration ##
-###################################
-catkin_package(
-  CATKIN_DEPENDS hector_geotiff hector_nav_msgs
-)
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
-###########
-## Build ##
-###########
-
-include_directories(
-  ${catkin_INCLUDE_DIRS}
-)
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(hector_geotiff REQUIRED)
+find_package(hector_nav_msgs REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(pluginlib REQUIRED)
 
 add_library(hector_geotiff_plugins src/trajectory_geotiff_plugin.cpp)
-add_dependencies(hector_geotiff_plugins ${catkin_EXPORTED_TARGETS})
-target_link_libraries(hector_geotiff_plugins
-  ${catkin_LIBRARIES}
+target_include_directories(hector_geotiff_plugins PUBLIC
+<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+<INSTALL_INTERFACE:include>)
+ament_target_dependencies(hector_geotiff_plugins
+  rclcpp
+  pluginlib
+  hector_geotiff
+  hector_nav_msgs
+)
+include_directories(include "../hector_geotiff/include" ${EIGEN3_INCLUDE_DIR})
+
+pluginlib_export_plugin_description_file(hector_geotiff_plugins hector_geotiff_plugins.xml)
+
+install(
+  TARGETS hector_geotiff_plugins
+  EXPORT export_${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
 )
 
-#############
-## Install ##
-#############
-
-# all install targets should use catkin DESTINATION variables
-# See http://ros.org/doc/api/catkin/html/adv_user_guide/variables.html
-
-install(TARGETS hector_geotiff_plugins
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+ament_export_libraries(
+  hector_geotiff_plugins
 )
-
-install(FILES
-  hector_geotiff_plugins.xml
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+ament_export_targets(
+  export_${PROJECT_NAME}
 )

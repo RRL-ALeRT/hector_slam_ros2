@@ -1,15 +1,23 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.8)
 project(hector_marker_drawing)
 
-find_package(catkin REQUIRED COMPONENTS roscpp visualization_msgs)
+
+set(CMAKE_CXX_STANDARD 14)
+
+# Default to C++14
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
+endif()
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
 find_package(Eigen3 REQUIRED)
-
-catkin_package(
-  INCLUDE_DIRS include
-  CATKIN_DEPENDS roscpp visualization_msgs
-  DEPENDS EIGEN3
-)
 
 #############
 ## Install ##
@@ -19,7 +27,10 @@ catkin_package(
 # See http://ros.org/doc/api/catkin/html/adv_user_guide/variables.html
 
 install(DIRECTORY include/${PROJECT_NAME}/
-  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+  DESTINATION include/${PROJECT_NAME}
   FILES_MATCHING PATTERN "*.h"
   PATTERN ".svn" EXCLUDE
 )
+ament_export_include_directories(include)
+
+ament_package()

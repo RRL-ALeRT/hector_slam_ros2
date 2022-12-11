@@ -1,100 +1,43 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.8)
 project(hector_mapping)
 
-find_package(catkin REQUIRED COMPONENTS 
-  roscpp
-  nav_msgs
-  visualization_msgs
-  tf
-  message_filters
-  laser_geometry
-  message_generation
-  std_srvs)
+set(CMAKE_CXX_STANDARD 14)
+
+# Default to C++14
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
+endif()
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(laser_geometry REQUIRED)
+find_package(hector_nav_msgs REQUIRED)
+find_package(pcl_conversions REQUIRED)
 
 find_package(Boost REQUIRED COMPONENTS thread)
 
 find_package(Eigen3 REQUIRED)
 
-#######################################
-## Declare ROS messages and services ##
-#######################################
+add_executable(hector_mapping_node src/main.cpp src/HectorMappingRos.cpp src/PoseInfoContainer.cpp)
+include_directories("include/hector_slam_lib/")
+ament_target_dependencies(hector_mapping_node rclcpp Boost tf2 tf2_ros sensor_msgs hector_nav_msgs std_srvs laser_geometry visualization_msgs pcl_conversions)
 
-## Generate messages in the 'msg' folder
-add_message_files(
-  FILES
-  HectorDebugInfo.msg
-  HectorIterData.msg
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
 )
 
-## Generate services in the 'srv' folder
-add_service_files(
-  FILES
-  ResetMapping.srv
-)
+install(TARGETS
+  hector_mapping_node
+  DESTINATION lib/${PROJECT_NAME})
 
-generate_messages(
-  DEPENDENCIES
-  geometry_msgs
-)
-
-###################################
-## catkin specific configuration ##
-###################################
-catkin_package(
-  INCLUDE_DIRS include
-#  LIBRARIES hector_mapping
-  CATKIN_DEPENDS roscpp nav_msgs visualization_msgs tf message_filters laser_geometry message_runtime
-  DEPENDS EIGEN3
-)
-
-###########
-## Build ##
-###########
-
-include_directories(include/hector_slam_lib)
-include_directories(
-  ${Boost_INCLUDE_DIRS}
-  ${catkin_INCLUDE_DIRS}
-  ${EIGEN3_INCLUDE_DIRS}
-)
-
-add_executable(hector_mapping
-  src/HectorDebugInfoProvider.h
-  src/HectorDrawings.h
-  src/HectorMappingRos.h
-  src/HectorMappingRos.cpp
-  src/main.cpp
-  src/PoseInfoContainer.cpp
-  src/PoseInfoContainer.h
-)
-
-add_dependencies(hector_mapping hector_mapping_generate_messages_cpp)
-
-target_link_libraries(hector_mapping
-  ${catkin_LIBRARIES}
-  ${Boost_LIBRARIES}
-)
-
-#############
-## Install ##
-#############
-
-# all install targets should use catkin DESTINATION variables
-# See http://ros.org/doc/api/catkin/html/adv_user_guide/variables.html
-
-install(TARGETS hector_mapping
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-)
-
-## Don't ask why it's hector_slam_lib, this was Stefan Kohlbrecher's first ROS package and a wrapper of a pre ROS header only library
-install(DIRECTORY include/hector_slam_lib/
-  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
-  FILES_MATCHING PATTERN "*.h"
-  PATTERN ".svn" EXCLUDE
-)
-
-install(DIRECTORY launch/
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch/
-)
+ament_package()

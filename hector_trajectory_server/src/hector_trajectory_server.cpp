@@ -27,27 +27,30 @@
 //=================================================================================================
 
 #include <cstdio>
-#include "ros/ros.h"
-#include "ros/console.h"
+#include "rclcpp/rclcpp.hpp"
+#include <rclcpp/create_timer.hpp>
 
-#include "nav_msgs/Path.h"
-#include "std_msgs/String.h"
+#include "nav_msgs/msg/path.hpp"
+#include "std_msgs/msg/string.hpp"
 
-#include <geometry_msgs/Quaternion.h>
-#include <geometry_msgs/PoseStamped.h>
+#include "geometry_msgs/msg/quaternion.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
 
-#include "tf/transform_listener.h"
+#include "tf2_ros/transform_listener.h"
+#include "tf2_ros/message_filter.h"
+#include "tf2_ros/create_timer_ros.h"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 
-#include <hector_nav_msgs/GetRobotTrajectory.h>
-#include <hector_nav_msgs/GetRecoveryInfo.h>
-
-#include <tf/tf.h>
+#include "hector_nav_msgs/srv/get_robot_trajectory.hpp"
+#include "hector_nav_msgs/srv/get_recovery_info.hpp"
 
 #include <algorithm>
 
 using namespace std;
 
-bool comparePoseStampedStamps (const geometry_msgs::PoseStamped& t1, const geometry_msgs::PoseStamped& t2) { return (t1.header.stamp < t2.header.stamp); }
+bool comparePoseStampedStamps (const geometry_msgs::msg::PoseStamped& t1, const geometry_msgs::msg::PoseStamped& t2) {
+  return (t1.header.stamp.sec < t2.header.stamp.sec && t1.header.stamp.nanosec < t2.header.stamp.nanosec);
+}
 
 
 /**
@@ -56,28 +59,38 @@ bool comparePoseStampedStamps (const geometry_msgs::PoseStamped& t1, const geome
 class PathContainer
 {
 public:
-  PathContainer()
+  PathContainer(rclcpp::Node::SharedPtr node) : nh(node)
   {
-    ros::NodeHandle private_nh("~");
+    p_target_frame_name_ = nh->declare_parameter("target_frame_name", "map");
+    p_source_frame_name_ = nh->declare_parameter("source_frame_name", "base_link");
+    p_trajectory_update_rate_ = nh->declare_parameter("trajectory_update_rate", 4.0);
+    p_trajectory_publish_rate_ = nh->declare_parameter("trajectory_publish_rate", 0.25);
 
-    private_nh.param("target_frame_name", p_target_frame_name_, std::string("map"));
-    private_nh.param("source_frame_name", p_source_frame_name_, std::string("base_link"));
-    private_nh.param("trajectory_update_rate", p_trajectory_update_rate_, 4.0);
-    private_nh.param("trajectory_publish_rate", p_trajectory_publish_rate_, 0.25);
+    double tmp_val = 30;
+    tf_ = std::make_unique<tf2_ros::Buffer>(nh->get_clock(),
+        tf2::durationFromSec(tmp_val));
+    auto timer_interface = std::make_shared<tf2_ros::CreateTimerROS>(
+      rclcpp::node_interfaces::get_node_base_interface(nh),
+      rclcpp::node_interfaces::get_node_timers_interface(nh));
+    tf_->setCreateTimerInterface(timer_interface);
+    tfL_ = std::make_shared<tf2_ros::TransformListener>(*tf_);
 
     waitForTf();
 
-    ros::NodeHandle nh;
-    sys_cmd_sub_ = nh.subscribe("syscommand", 1, &PathContainer::sysCmdCallback, this);
-    trajectory_pub_ = nh.advertise<nav_msgs::Path>("trajectory",1, true);
+    sys_cmd_sub_ = nh->create_subscription<std_msgs::msg::String>("syscommand", 1, std::bind(&PathContainer::sysCmdCallback, this, std::placeholders::_1));
+    trajectory_pub_ = nh->create_publisher<nav_msgs::msg::Path>("trajectory", 1);
 
-    trajectory_provider_service_ = nh.advertiseService("trajectory", &PathContainer::trajectoryProviderCallBack, this);
-    recovery_info_provider_service_ = nh.advertiseService("trajectory_recovery_info", &PathContainer::recoveryInfoProviderCallBack, this);
+    trajectory_provider_service_ = nh->create_service<hector_nav_msgs::srv::GetRobotTrajectory>("trajectory",
+      std::bind(&PathContainer::trajectoryProviderCallBack, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    recovery_info_provider_service_ = nh->create_service<hector_nav_msgs::srv::GetRecoveryInfo>("trajectory_recovery_info",
+      std::bind(&PathContainer::recoveryInfoProviderCallBack, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
-    last_reset_time_ = ros::Time::now();
+    last_reset_time_ = nh->get_clock()->now();
 
-    update_trajectory_timer_ = private_nh.createTimer(ros::Duration(1.0 / p_trajectory_update_rate_), &PathContainer::trajectoryUpdateTimerCallback, this, false);
-    publish_trajectory_timer_ = private_nh.createTimer(ros::Duration(1.0 / p_trajectory_publish_rate_), &PathContainer::publishTrajectoryTimerCallback, this, false);
+    update_trajectory_timer_ = rclcpp::create_timer(nh, nh->get_clock(), rclcpp::Duration::from_seconds(1.0 / p_trajectory_update_rate_),
+      std::bind(&PathContainer::trajectoryUpdateTimerCallback, this));
+    publish_trajectory_timer_ = rclcpp::create_timer(nh, nh->get_clock(), rclcpp::Duration::from_seconds(1.0 / p_trajectory_publish_rate_),
+      std::bind(&PathContainer::publishTrajectoryTimerCallback, this));
 
     pose_source_.pose.orientation.w = 1.0;
     pose_source_.header.frame_id = p_source_frame_name_;
@@ -87,107 +100,133 @@ public:
 
   void waitForTf()
   {
-    ros::Time start = ros::Time::now();
-    ROS_INFO("Waiting for tf transform data between frames %s and %s to become available", p_target_frame_name_.c_str(), p_source_frame_name_.c_str() );
+    auto start = nh->get_clock()->now().seconds();
+    RCLCPP_INFO(nh->get_logger(), "Waiting for tf transform data between frames %s and %s to become available", p_target_frame_name_.c_str(), p_source_frame_name_.c_str() );
 
     bool transform_successful = false;
 
     while (!transform_successful){
-      transform_successful = tf_.canTransform(p_target_frame_name_, p_source_frame_name_, ros::Time());
+      transform_successful = tf_->canTransform(p_target_frame_name_, p_source_frame_name_, rclcpp::Time(), rclcpp::Duration::from_seconds(0.5));
       if (transform_successful) break;
 
-      ros::Time now = ros::Time::now();
+      auto now = nh->get_clock()->now().seconds();
 
-      if ((now-start).toSec() > 20.0){
-        ROS_WARN_ONCE("No transform between frames %s and %s available after %f seconds of waiting. This warning only prints once.", p_target_frame_name_.c_str(), p_source_frame_name_.c_str(), (now-start).toSec());
+      if (now-start > 20.0){
+        RCLCPP_WARN_ONCE(nh->get_logger(), "No transform between frames %s and %s available after %f seconds of waiting. This warning only prints once.", p_target_frame_name_.c_str(), p_source_frame_name_.c_str(), (now-start));
       }
       
-      if (!ros::ok()) return;
-      ros::WallDuration(1.0).sleep();
+      if (!rclcpp::ok()) return;
+      rclcpp::sleep_for(1000ms);
     }
 
-    ros::Time end = ros::Time::now();
-    ROS_INFO("Finished waiting for tf, waited %f seconds", (end-start).toSec());
+    auto end = nh->get_clock()->now().seconds();
+    RCLCPP_INFO(nh->get_logger(), "Finished waiting for tf, waited %f seconds", (end-start));
   }
 
 
-  void sysCmdCallback(const std_msgs::String& sys_cmd)
+  void sysCmdCallback(const std_msgs::msg::String& sys_cmd)
   {
     if (sys_cmd.data == "reset")
     {
-      last_reset_time_ = ros::Time::now();
+      last_reset_time_ = nh->get_clock()->now();
       trajectory_.trajectory.poses.clear();
-      trajectory_.trajectory.header.stamp = ros::Time::now();
+      trajectory_.trajectory.header.stamp = nh->get_clock()->now();
     }
   }
 
   void addCurrentTfPoseToTrajectory()
   {
-    pose_source_.header.stamp = ros::Time(0);
+    // pose_source_.header.stamp = rclcpp::Time(0);
+    geometry_msgs::msg::PoseStamped pose_out;
+    geometry_msgs::msg::TransformStamped source_to_target;
 
-    geometry_msgs::PoseStamped pose_out;
+    if (tf_->canTransform(p_target_frame_name_, pose_source_.header.frame_id, nh->get_clock()->now(), rclcpp::Duration::from_seconds(0.5)))
+    {
+      source_to_target = tf_->lookupTransform(pose_source_.header.frame_id, p_target_frame_name_, pose_source_.header.stamp);
+      tf2::Transform t_source_to_target(
+        tf2::Matrix3x3(tf2::Quaternion(
+          source_to_target.transform.rotation.x,source_to_target.transform.rotation.y,source_to_target.transform.rotation.z,source_to_target.transform.rotation.w)),
+        tf2::Vector3(source_to_target.transform.translation.x, source_to_target.transform.translation.y, source_to_target.transform.translation.z)
+      );
 
-    tf_.transformPose(p_target_frame_name_, pose_source_, pose_out);
+      auto t_position = t_source_to_target.inverse()*(tf2::Vector3(pose_source_.pose.position.x, pose_source_.pose.position.y, pose_source_.pose.position.z));
+      auto t_orientation = t_source_to_target.inverse()*(tf2::Quaternion(pose_source_.pose.orientation.x, pose_source_.pose.orientation.y, pose_source_.pose.orientation.z, pose_source_.pose.orientation.w));
+      pose_out.pose.position.x = t_position.getX();
+      pose_out.pose.position.y = t_position.getY();
+      pose_out.pose.position.z = t_position.getZ();
+      pose_out.pose.orientation.x = t_orientation.getX();
+      pose_out.pose.orientation.y = t_orientation.getY();
+      pose_out.pose.orientation.z = t_orientation.getZ();
+      pose_out.pose.orientation.w = t_orientation.getW();
+      pose_out.header.stamp = nh->get_clock()->now();
+      pose_out.header.frame_id = pose_source_.header.frame_id;
 
-    if (trajectory_.trajectory.poses.size() != 0){
-      //Only add pose to trajectory if it's not already stored
-      if (pose_out.header.stamp != trajectory_.trajectory.poses.back().header.stamp){
+      if (trajectory_.trajectory.poses.size() != 0){
+        //Only add pose to trajectory if it's not already stored
+        if (pose_out.header.stamp != trajectory_.trajectory.poses.back().header.stamp){
+          trajectory_.trajectory.poses.push_back(pose_out);
+        }
+      }else{
         trajectory_.trajectory.poses.push_back(pose_out);
       }
-    }else{
-      trajectory_.trajectory.poses.push_back(pose_out);
+      trajectory_.trajectory.header.stamp = pose_out.header.stamp;
+
     }
-
-    trajectory_.trajectory.header.stamp = pose_out.header.stamp;
-  }
-
-  void trajectoryUpdateTimerCallback(const ros::TimerEvent& event)
-  {
-
-    try{
-      addCurrentTfPoseToTrajectory();
-    }catch(tf::TransformException e)
+    else
     {
-      ROS_WARN("Trajectory Server: Transform from %s to %s failed: %s \n", p_target_frame_name_.c_str(), pose_source_.header.frame_id.c_str(), e.what() );
+      RCLCPP_INFO(nh->get_logger(), "lookupTransform %s to %s timed out. Could not transform laser scan into base_frame.", pose_source_.header.frame_id.c_str(), p_target_frame_name_.c_str());
+      return;
     }
   }
 
-  void publishTrajectoryTimerCallback(const ros::TimerEvent& event)
+  void trajectoryUpdateTimerCallback()
   {
-    trajectory_pub_.publish(trajectory_.trajectory);
+    // try{
+    addCurrentTfPoseToTrajectory();
+    // }catch(tf2::TransformException e)
+    // {
+    //   RCLCPP_WARN(nh->get_logger(), "Trajectory Server: Transform from %s to %s failed: %s \n", p_target_frame_name_.c_str(), pose_source_.header.frame_id.c_str(), e.what() );
+    // }
   }
 
-  bool trajectoryProviderCallBack(hector_nav_msgs::GetRobotTrajectory::Request  &req,
-                                  hector_nav_msgs::GetRobotTrajectory::Response &res )
+  void publishTrajectoryTimerCallback()
   {
-    res = getTrajectory();
+    trajectory_pub_->publish(trajectory_.trajectory);
+  }
+
+  bool trajectoryProviderCallBack(const std::shared_ptr<rmw_request_id_t> request_header,
+                                  const std::shared_ptr<hector_nav_msgs::srv::GetRobotTrajectory::Request> req, 
+                                  std::shared_ptr<hector_nav_msgs::srv::GetRobotTrajectory::Response> res)
+  {
+    *res = getTrajectory();
     return true;
   }
 
-  inline const hector_nav_msgs::GetRobotTrajectoryResponse getTrajectory() const
+  inline const hector_nav_msgs::srv::GetRobotTrajectory_Response getTrajectory() const
   {
     return trajectory_;
   }
 
-  bool recoveryInfoProviderCallBack(hector_nav_msgs::GetRecoveryInfo::Request  &req,
-                                  hector_nav_msgs::GetRecoveryInfo::Response &res )
+  bool recoveryInfoProviderCallBack(const std::shared_ptr<rmw_request_id_t> request_header,
+                                   const std::shared_ptr<hector_nav_msgs::srv::GetRecoveryInfo::Request> req, 
+                                   std::shared_ptr<hector_nav_msgs::srv::GetRecoveryInfo::Response> res)
   {
-    const ros::Time req_time = req.request_time;
+    const rclcpp::Time req_time = req->request_time;
 
-    geometry_msgs::PoseStamped tmp;
+    geometry_msgs::msg::PoseStamped tmp;
     tmp.header.stamp = req_time;
 
-    std::vector<geometry_msgs::PoseStamped> const & poses = trajectory_.trajectory.poses;
+    std::vector<geometry_msgs::msg::PoseStamped> const & poses = trajectory_.trajectory.poses;
 
     if(poses.size() == 0)
     {
-        ROS_WARN("Failed to find trajectory leading out of radius %f"
-                 " because no poses, i.e. no inverse trajectory, exists.", req.request_radius);
+        RCLCPP_WARN(nh->get_logger(), "Failed to find trajectory leading out of radius %f"
+                 " because no poses, i.e. no inverse trajectory, exists.", req->request_radius);
         return false;
     }
 
     //Find the robot pose in the saved trajectory
-    std::vector<geometry_msgs::PoseStamped>::const_iterator it
+    std::vector<geometry_msgs::msg::PoseStamped>::const_iterator it
             = std::lower_bound(poses.begin(), poses.end(), tmp, comparePoseStampedStamps);
 
     //If we didn't find the robot pose for the desired time, add the current robot pose to trajectory
@@ -197,17 +236,17 @@ public:
       --it;
     }
 
-    std::vector<geometry_msgs::PoseStamped>::const_iterator it_start = it;
+    std::vector<geometry_msgs::msg::PoseStamped>::const_iterator it_start = it;
 
-    const geometry_msgs::Point& req_coords ((*it).pose.position);
+    const geometry_msgs::msg::Point& req_coords ((*it).pose.position);
 
-    double dist_sqr_threshold = req.request_radius * req.request_radius;
+    double dist_sqr_threshold = req->request_radius * req->request_radius;
 
     double dist_sqr = 0.0;
 
     //Iterate backwards till the start of the trajectory is reached or we find a pose that's outside the specified radius
     while (it != poses.begin() && dist_sqr < dist_sqr_threshold){
-      const geometry_msgs::Point& curr_coords ((*it).pose.position);
+      const geometry_msgs::msg::Point& curr_coords ((*it).pose.position);
 
       dist_sqr = (req_coords.x - curr_coords.x) * (req_coords.x - curr_coords.x) +
                  (req_coords.y - curr_coords.y) * (req_coords.y - curr_coords.y);
@@ -216,21 +255,21 @@ public:
     }
 
     if (dist_sqr < dist_sqr_threshold){
-      ROS_INFO("Failed to find trajectory leading out of radius %f", req.request_radius);
+      RCLCPP_INFO(nh->get_logger(), "Failed to find trajectory leading out of radius %f", req->request_radius);
       return false;
     }
 
-    std::vector<geometry_msgs::PoseStamped>::const_iterator it_end = it;
+    std::vector<geometry_msgs::msg::PoseStamped>::const_iterator it_end = it;
 
-    res.req_pose = *it_start;
-    res.radius_entry_pose = *it_end;
+    res->req_pose = *it_start;
+    res->radius_entry_pose = *it_end;
 
-    std::vector<geometry_msgs::PoseStamped>& traj_out_poses = res.trajectory_radius_entry_pose_to_req_pose.poses;
+    std::vector<geometry_msgs::msg::PoseStamped>& traj_out_poses = res->trajectory_radius_entry_pose_to_req_pose.poses;
 
-    res.trajectory_radius_entry_pose_to_req_pose.poses.clear();
-    res.trajectory_radius_entry_pose_to_req_pose.header = res.req_pose.header;
+    res->trajectory_radius_entry_pose_to_req_pose.poses.clear();
+    res->trajectory_radius_entry_pose_to_req_pose.header = res->req_pose.header;
 
-    for (std::vector<geometry_msgs::PoseStamped>::const_iterator it_tmp = it_start; it_tmp != it_end; --it_tmp){
+    for (std::vector<geometry_msgs::msg::PoseStamped>::const_iterator it_tmp = it_start; it_tmp != it_end; --it_tmp){
       traj_out_poses.push_back(*it_tmp);
     }
 
@@ -244,34 +283,39 @@ public:
   double p_trajectory_publish_rate_;
 
   // Zero pose used for transformation to target_frame.
-  geometry_msgs::PoseStamped pose_source_;
+  geometry_msgs::msg::PoseStamped pose_source_;
 
-  ros::ServiceServer trajectory_provider_service_;
-  ros::ServiceServer recovery_info_provider_service_;
+  rclcpp::Node::SharedPtr nh;
 
-  ros::Timer update_trajectory_timer_;
-  ros::Timer publish_trajectory_timer_;
+  rclcpp::Service<hector_nav_msgs::srv::GetRobotTrajectory>::SharedPtr trajectory_provider_service_;
+  rclcpp::Service<hector_nav_msgs::srv::GetRecoveryInfo>::SharedPtr recovery_info_provider_service_;
+
+  rclcpp::TimerBase::SharedPtr update_trajectory_timer_;
+  rclcpp::TimerBase::SharedPtr publish_trajectory_timer_;
 
 
-  //ros::Subscriber pose_update_sub_;
-  ros::Subscriber sys_cmd_sub_;
-  ros::Publisher  trajectory_pub_;
+  //rclcpp::Subscription<>::SharedPtr pose_update_sub_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sys_cmd_sub_;
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr  trajectory_pub_;
 
-  hector_nav_msgs::GetRobotTrajectory::Response trajectory_;
+  hector_nav_msgs::srv::GetRobotTrajectory::Response trajectory_;
 
-  tf::TransformListener tf_;
+  std::unique_ptr<tf2_ros::Buffer> tf_;
+  std::shared_ptr<tf2_ros::TransformListener> tfL_{nullptr};
 
-  ros::Time last_reset_time_;
-  ros::Time last_pose_save_time_;
+  rclcpp::Time last_reset_time_;
+  rclcpp::Time last_pose_save_time_;
 };
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "hector_trajectory_server");
+  rclcpp::init(argc, argv);
 
-  PathContainer pc;
+  auto node = std::make_shared<rclcpp::Node>("hector_trajectory_server");
 
-  ros::spin();
+  PathContainer pc(node);
+
+  rclcpp::spin(node);
 
   return 0;
 }

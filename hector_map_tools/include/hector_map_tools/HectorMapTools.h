@@ -29,8 +29,8 @@
 #ifndef __HectorMapTools_h_
 #define __HectorMapTools_h_
 
-#include <nav_msgs/OccupancyGrid.h>
-#include <nav_msgs/MapMetaData.h>
+#include <nav_msgs/msg/occupancy_grid.hpp>
+#include <nav_msgs/msg/map_meta_data.hpp>
 
 #include<Eigen/Core>
 
@@ -46,18 +46,18 @@ public:
 
     }
 
-    CoordinateTransformer(const nav_msgs::OccupancyGridConstPtr map)
+    CoordinateTransformer(const nav_msgs::msg::OccupancyGrid::ConstPtr map)
     {
       this->setTransforms(*map);
     }
 
 
-    void setTransforms(const nav_msgs::OccupancyGrid& map)
+    void setTransforms(const nav_msgs::msg::OccupancyGrid& map)
     {
       this->setTransforms(map.info);
     }
 
-    void setTransforms(const nav_msgs::MapMetaData& meta)
+    void setTransforms(const nav_msgs::msg::MapMetaData& meta)
     {
       origo_ = (Eigen::Matrix<ConcreteScalar, 2, 1>(static_cast<ConcreteScalar>(meta.origin.position.x),static_cast<ConcreteScalar>(meta.origin.position.y)));
       scale_ = (static_cast<ConcreteScalar>(meta.resolution));
@@ -123,7 +123,7 @@ public:
 
     }
 
-    void setMap(const nav_msgs::OccupancyGridConstPtr map)
+    void setMap(const nav_msgs::msg::OccupancyGrid::ConstPtr map)
     {
       map_ptr_ = map;
 
@@ -233,12 +233,12 @@ public:
 
   protected:
     CoordinateTransformer<float> world_map_transformer_;
-    nav_msgs::OccupancyGridConstPtr map_ptr_;
+    nav_msgs::msg::OccupancyGrid::ConstPtr map_ptr_;
 
 
   };
 
-  static bool getMapExtends(const nav_msgs::OccupancyGrid& map, Eigen::Vector2i& topLeft, Eigen::Vector2i& bottomRight)
+  static bool getMapExtends(const nav_msgs::msg::OccupancyGrid& map, Eigen::Vector2i& topLeft, Eigen::Vector2i& bottomRight)
   {
     int lowerStart = -1;
     int upperStart = 10000000;

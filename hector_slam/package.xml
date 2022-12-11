@@ -38,25 +38,25 @@
   <!--   <run_depend>message_runtime</run_depend> -->
   <!-- Use test_depend for packages you need only for testing: -->
   <!--   <test_depend>gtest</test_depend> -->
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
   <run_depend>hector_compressed_map_transport</run_depend>
   <run_depend>hector_geotiff</run_depend>
-  <run_depend>hector_geotiff_launch</run_depend>
-  <run_depend>hector_geotiff_plugins</run_depend>
+  <!-- <run_depend>hector_geotiff_launch</run_depend>
+  <run_depend>hector_geotiff_plugins</run_depend> -->
   <run_depend>hector_imu_attitude_to_tf</run_depend>
-  <run_depend>hector_map_server</run_depend>
+  <!-- <run_depend>hector_map_server</run_depend> -->
   <run_depend>hector_map_tools</run_depend>
-  <run_depend>hector_mapping</run_depend>
-  <run_depend>hector_marker_drawing</run_depend>
+  <!-- <run_depend>hector_mapping</run_depend>
+  <run_depend>hector_marker_drawing</run_depend> -->
   <run_depend>hector_nav_msgs</run_depend>
-  <run_depend>hector_slam_launch</run_depend>
-  <run_depend>hector_trajectory_server</run_depend>
+  <!-- <run_depend>hector_slam_launch</run_depend>
+  <run_depend>hector_trajectory_server</run_depend> -->
 
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
     <!-- You can specify that this package is a metapackage here: -->
-    <metapackage/>
+    <!-- <metapackage/> -->
 
     <!-- Other tools can request additional information be placed here -->
 

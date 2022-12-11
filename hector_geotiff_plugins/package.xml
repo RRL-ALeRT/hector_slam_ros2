@@ -37,7 +37,7 @@
   <!--   <run_depend>message_runtime</run_depend> -->
   <!-- Use test_depend for packages you need only for testing: -->
   <!--   <test_depend>gtest</test_depend> -->
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
   <build_depend>hector_geotiff</build_depend>
   <build_depend>hector_nav_msgs</build_depend>
   <run_depend>hector_geotiff</run_depend>
@@ -46,6 +46,7 @@
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
+    <build_type>ament_cmake</build_type>
     <!-- You can specify that this package is a metapackage here: -->
     <!-- <metapackage/> -->
 

@@ -30,7 +30,7 @@
 #define utilfunctions_h__
 
 #include <cmath>
-#include <tf/LinearMath/Transform.h>
+#include "tf2/utils.h"
 
 namespace util{
 
@@ -91,9 +91,13 @@ static bool poseDifferenceLargerThan(const Eigen::Vector3f& pose1, const Eigen::
   return false;
 }
 
-static double getYawFromQuat(const geometry_msgs::Quaternion &quat)
+static double getYawFromQuat(const geometry_msgs::msg::Quaternion &quat)
 {
-  return tf::getYaw(tf::Quaternion(quat.x, quat.y, quat.z, quat.w));
+  tf2::Quaternion q(quat.x, quat.y, quat.z, quat.w);
+  tf2::Matrix3x3 m(q);
+  double roll, pitch, yaw;
+  m.getRPY(roll, pitch, yaw);  
+  return yaw;
 }
 
 }

@@ -33,8 +33,8 @@
 
 #include <Eigen/Geometry>
 
-#include <nav_msgs/OccupancyGrid.h>
-#include <nav_msgs/MapMetaData.h>
+#include <nav_msgs/msg/occupancy_grid.h>
+#include <nav_msgs/msg/map_meta_data.h>
 
 #include <QImage>
 #include <QApplication>
@@ -67,9 +67,9 @@ class GeotiffWriter : public MapWriterInterface
   void setUseUtcTimeSuffix(bool useSuffix);
 
   void setupImageSize();
-  bool setupTransforms(const nav_msgs::OccupancyGrid& map);
+  bool setupTransforms(const nav_msgs::msg::OccupancyGrid& map);
   void drawBackgroundCheckerboard();
-  void drawMap(const nav_msgs::OccupancyGrid& map, bool draw_explored_space_grid = true);
+  void drawMap(const nav_msgs::msg::OccupancyGrid& map, bool draw_explored_space_grid = true);
   void drawObjectOfInterest(const Eigen::Vector2f& coords, const std::string& txt, const Color& color, const Shape& shape);
   inline virtual void drawPath(const Eigen::Vector3f& start, const std::vector<Eigen::Vector2f>& points){
       drawPath(start, points, 120,0,240);
@@ -131,7 +131,7 @@ protected:
   HectorMapTools::CoordinateTransformer<float> map_geo_transformer_;
   HectorMapTools::CoordinateTransformer<float> world_geo_transformer_;
 
-  nav_msgs::MapMetaData cached_map_meta_data_;
+  nav_msgs::msg::MapMetaData cached_map_meta_data_;
 };
 
 }
