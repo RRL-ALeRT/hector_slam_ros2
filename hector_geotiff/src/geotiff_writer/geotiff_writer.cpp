@@ -416,8 +416,8 @@ void GeotiffWriter::drawMap( const nav_msgs::msg::OccupancyGrid &map, bool draw_
   }
 }
 
-void GeotiffWriter::drawObjectOfInterest( const Eigen::Vector2f &coords, const std::string &txt, const Color &color,
-                                          const Shape &shape )
+void GeotiffWriter::drawObjectOfInterest( const Eigen::Vector2f &coords, const std::string &txt, const Eigen::Vector3f &color,
+                                          const std::string &shape )
 {
   QPainter qPainter( &image );
 
@@ -441,16 +441,16 @@ void GeotiffWriter::drawObjectOfInterest( const Eigen::Vector2f &coords, const s
   QRectF shape_rect( -radius, -radius, radius * 2.0f, radius * 2.0f );
   qPainter.save();
 
-  QBrush tmpBrush( QColor( color.r, color.g, color.b ));
+  QBrush tmpBrush( QColor( color[0], color[1], color[2] ));
   QPen tmpPen( Qt::NoPen );
   qPainter.setBrush( tmpBrush );
   qPainter.setPen( tmpPen );
 
-  if ( shape == SHAPE_CIRCLE )
+  if ( shape == "CIRCLE" )
   {
     qPainter.drawEllipse( shape_rect );
   }
-  else if ( shape == SHAPE_DIAMOND )
+  else if ( shape == "DIAMOND" )
   {
     qPainter.rotate( 45 );
     qPainter.drawRect( shape_rect );

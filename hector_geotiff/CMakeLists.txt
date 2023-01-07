@@ -20,6 +20,7 @@ find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(ament_index_cpp)
+find_package(world_info_msgs)
 
 find_package(Qt5 COMPONENTS Widgets REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -44,7 +45,11 @@ ament_target_dependencies(geotiff_saver rclcpp nav_msgs visualization_msgs)
 
 add_executable(geotiff_node src/geotiff_node.cpp)
 target_link_libraries(geotiff_node geotiff_writer)
-ament_target_dependencies(geotiff_node rclcpp pluginlib hector_nav_msgs)
+ament_target_dependencies(geotiff_node rclcpp pluginlib hector_nav_msgs world_info_msgs)
+
+add_executable(geotiff_node_cartographer src/geotiff_node_cartographer.cpp)
+target_link_libraries(geotiff_node_cartographer geotiff_writer)
+ament_target_dependencies(geotiff_node_cartographer rclcpp pluginlib hector_nav_msgs world_info_msgs)
 
 #############
 ## Install ##
@@ -66,6 +71,7 @@ install(DIRECTORY fonts
 install(TARGETS
   geotiff_writer
   geotiff_saver
+  geotiff_node_cartographer
   geotiff_node
   DESTINATION lib/${PROJECT_NAME})
 

@@ -73,7 +73,7 @@ public:
     sys_cmd_sub_ = node_->create_subscription<std_msgs::msg::String>("syscommand", 1, std::bind(&MapGenerator::sysCmdCallback, this, std::placeholders::_1));
     world_info_sub_ = node_->create_subscription<world_info_msgs::msg::WorldInfoArray>("world_info_array", 1, std::bind(&MapGenerator::saveMapInfoCallback, this, std::placeholders::_1));
 
-    map_service_client_ = node_->create_client<nav_msgs::srv::GetMap>("dynamic_map");
+    map_service_client_ = node_->create_client<nav_msgs::srv::GetMap>("map");
     //object_service_client_ = n_.serviceClient<worldmodel_msgs::GetObjectModel>("worldmodel/get_object_model");
     path_service_client_ = node_->create_client<hector_nav_msgs::srv::GetRobotTrajectory>("trajectory");
 

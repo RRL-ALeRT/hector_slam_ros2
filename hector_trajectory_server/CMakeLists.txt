@@ -30,12 +30,18 @@ ament_target_dependencies(hector_trajectory_server
   rclcpp hector_nav_msgs nav_msgs hector_map_tools tf2 tf2_ros tf2_geometry_msgs
 )
 
+add_executable(odometry_topic src/odometry_topic.cpp)
+ament_target_dependencies(odometry_topic
+  rclcpp hector_nav_msgs nav_msgs hector_map_tools tf2 tf2_ros tf2_geometry_msgs
+)
+
 #############
 ## Install ##
 #############
 
 install(TARGETS
   hector_trajectory_server
+  odometry_topic
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()

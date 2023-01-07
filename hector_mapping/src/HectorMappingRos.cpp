@@ -76,7 +76,7 @@ HectorMappingRos::HectorMappingRos(rclcpp::Node::SharedPtr node)
 
   p_pub_drawings = node_->declare_parameter("pub_drawings", false);
   p_pub_debug_output_ = node_->declare_parameter("pub_debug_output", false);
-  p_pub_map_odom_transform_ = node_->declare_parameter("pub_map_odom_transform", true);
+  p_pub_map_odom_transform_ = node_->declare_parameter("pub_map_odom_transform", false);
   p_pub_odometry_ = node_->declare_parameter("pub_odometry", true);
   p_advertise_map_service_ = node_->declare_parameter("advertise_map_service", true);
   p_scan_subscriber_queue_size_ = node_->declare_parameter("scan_subscriber_queue_size", 5);
@@ -97,16 +97,16 @@ HectorMappingRos::HectorMappingRos(rclcpp::Node::SharedPtr node)
   p_sys_msg_topic_ = node_->declare_parameter("sys_msg_topic", "syscommand");
   p_pose_update_topic_ = node_->declare_parameter("pose_update_topic", "poseupdate");
 
-  p_use_tf_scan_transformation_ = node_->declare_parameter("use_tf_scan_transformation", false);
+  p_use_tf_scan_transformation_ = node_->declare_parameter("use_tf_scan_transformation", true);
   p_use_tf_pose_start_estimate_ = node_->declare_parameter("use_tf_pose_start_estimate", false);
   p_map_with_known_poses_ = node_->declare_parameter("map_with_known_poses", false);
 
   p_base_frame_ = node_->declare_parameter("base_frame", "base_link");
   p_map_frame_ = node_->declare_parameter("map_frame", "map");
-  p_odom_frame_ = node_->declare_parameter("odom_frame", "odom");
+  p_odom_frame_ = node_->declare_parameter("odom_frame", "odometry");
 
   p_pub_map_scanmatch_transform_ = node_->declare_parameter("pub_map_scanmatch_transform", true);
-  p_tf_map_scanmatch_transform_frame_name_ = node_->declare_parameter("tf_map_scanmatch_transform_frame_name", "Velodyne_Puck");
+  p_tf_map_scanmatch_transform_frame_name_ = node_->declare_parameter("tf_map_scanmatch_transform_frame_name", "base_link");
 
   p_timing_output_ = node_->declare_parameter("output_timing", false);
 

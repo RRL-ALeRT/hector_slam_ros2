@@ -36,17 +36,26 @@ void PoseInfoContainer::update(const Eigen::Vector3f& slamPose, const Eigen::Mat
   header.stamp = stamp;
   header.frame_id = frame_id;
 
-  geometry_msgs::msg::Pose& pose = stampedPose_.pose;
-  pose.position.x = slamPose.x();
-  pose.position.y = slamPose.y();
+  // geometry_msgs::msg::Pose& pose = stampedPose_.pose;
+  // pose.position.x = slamPose.x();
+  // pose.position.y = slamPose.y();
 
-  pose.orientation.w = cos(slamPose.z()*0.5f);
-  pose.orientation.z = sin(slamPose.z()*0.5f);
+  // pose.orientation.w = cos(slamPose.z()*0.5f);
+  // pose.orientation.z = sin(slamPose.z()*0.5f);
+
+  stampedPose_.header.stamp = stamp;
+  stampedPose_.header.frame_id = frame_id;
+
+  stampedPose_.pose.position.x = slamPose.x();
+  stampedPose_.pose.position.y = slamPose.y();
+
+  stampedPose_.pose.orientation.w = cos(slamPose.z()*0.5f);
+  stampedPose_.pose.orientation.z = sin(slamPose.z()*0.5f);
 
   //Fill covPose
-  //geometry_msgs::PoseWithCovarianceStamped covPose;
+  geometry_msgs::msg::PoseWithCovarianceStamped covPose;
   covPose_.header = header;
-  covPose_.pose.pose = pose;
+  covPose_.pose.pose = stampedPose_.pose;
 
   // boost::array<double, 36>& cov(covPose_.pose.covariance);
 
@@ -69,9 +78,9 @@ void PoseInfoContainer::update(const Eigen::Vector3f& slamPose, const Eigen::Mat
   //Fill tf tansform
   // tf2::poseMsgToTF(pose, poseTransform_);
   poseTransform_.header = header;
-  poseTransform_.transform.translation.x = pose.position.x;
-  poseTransform_.transform.translation.y = pose.position.y;
-  poseTransform_.transform.translation.z = pose.position.z;
-  poseTransform_.transform.rotation.w = pose.orientation.w;
-  poseTransform_.transform.rotation.z = pose.orientation.z;
+  poseTransform_.transform.translation.x = stampedPose_.pose.position.x;
+  poseTransform_.transform.translation.y = stampedPose_.pose.position.y;
+  poseTransform_.transform.translation.z = stampedPose_.pose.position.z;
+  poseTransform_.transform.rotation.w = stampedPose_.pose.orientation.w;
+  poseTransform_.transform.rotation.z = stampedPose_.pose.orientation.z;
 }
