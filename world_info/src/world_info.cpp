@@ -54,6 +54,7 @@ void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
 {
   info = *msg;
   if (info.type == "apriltag") {
+    // Check in reverse order if incoming tag is already loaded.
     for(int i=wi_vector.array.size()-1; i>=0; i--) {
       if (wi_vector.array[i].type == info.type && wi_vector.array[i].num == info.num)
         return;
