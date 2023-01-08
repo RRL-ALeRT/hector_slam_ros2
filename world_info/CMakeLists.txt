@@ -1,6 +1,16 @@
 cmake_minimum_required(VERSION 3.8)
 project(world_info)
 
+# Default to C99
+if(NOT CMAKE_C_STANDARD)
+  set(CMAKE_C_STANDARD 99)
+endif()
+
+# Default to C++14
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
+endif()
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
@@ -8,15 +18,31 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
 find_package(world_info_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(OpenCV REQUIRED)
+find_package(cv_bridge REQUIRED)
 
 add_executable(world_info src/world_info.cpp)
 ament_target_dependencies(world_info rclcpp world_info_msgs tf2_ros tf2_geometry_msgs)
 
+add_library(qrcode SHARED src/qrcode.cpp)
+ament_target_dependencies(qrcode rclcpp rclcpp_components world_info_msgs sensor_msgs Eigen3 OpenCV cv_bridge tf2_ros)
+target_link_libraries (qrcode ${ZBAR_LIBRARIES} zbar)
+rclcpp_components_register_node(qrcode
+PLUGIN "world_info::DetectQR"
+EXECUTABLE qrcode_node)
+
 install(TARGETS
   world_info
+  qrcode
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
