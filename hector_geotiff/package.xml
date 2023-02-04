@@ -37,6 +37,7 @@
   <depend>pluginlib</depend>
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
+  <depend>world_info_msgs</depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->

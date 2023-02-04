@@ -1,5 +1,6 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/image.hpp"
+#include <image_transport/image_transport.hpp>
 #include "world_info_msgs/msg/world_info.hpp"
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include <geometry_msgs/msg/quaternion.hpp>
@@ -13,7 +14,16 @@
 #include <numeric>
 #include <vector>
 
-using namespace std;
+rcl_interfaces::msg::ParameterDescriptor
+descr(const std::string& description, const bool& read_only = false)
+{
+    rcl_interfaces::msg::ParameterDescriptor descr;
+
+    descr.description = description;
+    descr.read_only = read_only;
+
+    return descr;
+}
 
 namespace world_info
 {
@@ -22,29 +32,45 @@ class DetectQR : public rclcpp::Node
 {
   public:
     explicit DetectQR(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
-    : Node("qrcode", options)
+    : Node("qrcode", options),
+      // topics
+      // sub_cam(image_transport::create_camera_subscription(this, "image_rect",
+      //   std::bind(&DetectQR::onCamera, this, std::placeholders::_1, std::placeholders::_2),
+      //   declare_parameter("image_transport", "raw", descr({}, true)), rmw_qos_profile_sensor_data)),
+      sub_cam(image_transport::create_subscription(this, "image_rect",
+        std::bind(&DetectQR::onCamera, this, std::placeholders::_1),
+        declare_parameter("image_transport", "raw", descr({}, true)), rmw_qos_profile_sensor_data)),
+      pub_qr(image_transport::create_publisher(this, "qr_detected"))
     {
         // Initialize TransformBroadcaster
         tfb_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
-        // Create image message subscriber
-        auto callback = [this](const sensor_msgs::msg::Image::SharedPtr msg) -> void {
-            this->spot_kinect(msg);
+        square_length = 0.2;
+        if(!has_parameter("qr_square_length"))
+          declare_parameter("qr_square_length", square_length);
+        get_parameter("qr_square_length", square_length);
+
+        ref_points = {
+          {-square_length / 2,  square_length / 2, 0},
+          { square_length / 2,  square_length / 2, 0},
+          { square_length / 2, -square_length / 2, 0},
+          {-square_length / 2, -square_length / 2, 0}
         };
-        sub_ = this->create_subscription<sensor_msgs::msg::Image>("/Spot/kinect_color", 10, callback);
 
         // Create WorldInfo publisher
-        world_info_pub_ = this->create_publisher<world_info_msgs::msg::WorldInfo>("/world_info_sub", 1);
+        world_info_pub_ = create_publisher<world_info_msgs::msg::WorldInfo>("/world_info_sub", 1);
     }
 
   private:
-    void spot_kinect(const sensor_msgs::msg::Image::SharedPtr msg)
+    // void onCamera(const sensor_msgs::msg::Image::ConstSharedPtr& msg_img,
+    //               const sensor_msgs::msg::CameraInfo::ConstSharedPtr& msg_ci) # webots camera and info_msgs are not synced
+    void onCamera(const sensor_msgs::msg::Image::ConstSharedPtr& msg_img)
     {
         // Convert the image message to a cv::Mat object
-        cv::Mat kinect_img;
+        cv::Mat frame;
         try
         {
-            kinect_img =  cv_bridge::toCvShare(msg, "bgr8")->image;
+            frame =  cv_bridge::toCvShare(msg_img, "bgr8")->image;
         }
         catch (cv_bridge::Exception &e)
         {
@@ -52,12 +78,9 @@ class DetectQR : public rclcpp::Node
             return;
         }
 
-        // Get the size of the QR code squares
-        const float square_length = 0.665;
-
         // Convert the image to grayscale
         cv::Mat image_gray;
-        cv::cvtColor(kinect_img, image_gray, cv::COLOR_BGR2GRAY);
+        cv::cvtColor(frame, image_gray, cv::COLOR_BGR2GRAY);
 
         // Convert the OpenCV image to a zbar image
         int width = image_gray.cols;
@@ -71,28 +94,20 @@ class DetectQR : public rclcpp::Node
         for (zbar::Image::SymbolIterator symbol = image_zbar.symbol_begin(); symbol != image_zbar.symbol_end(); ++symbol)
         {
           // Get the location of the corners
-          int x1 = symbol->get_location_x(0);
-          int y1 = symbol->get_location_y(0);
-          int x2 = symbol->get_location_x(1);
-          int y2 = symbol->get_location_y(1);
-          int x3 = symbol->get_location_x(2);
-          int y3 = symbol->get_location_y(2);
-          int x4 = symbol->get_location_x(3);
-          int y4 = symbol->get_location_y(3);
+          int x2 = symbol->get_location_x(0);
+          int y2 = symbol->get_location_y(0);
+          int x3 = symbol->get_location_x(1);
+          int y3 = symbol->get_location_y(1);
+          int x4 = symbol->get_location_x(2);
+          int y4 = symbol->get_location_y(2);
+          int x1 = symbol->get_location_x(3);
+          int y1 = symbol->get_location_y(3);
 
           std::vector<cv::Point2f> corners = {
             cv::Point2f(x1, y1),
             cv::Point2f(x2, y2),
             cv::Point2f(x3, y3),
             cv::Point2f(x4, y4)
-          };
-
-          // Define the reference frame (e.g. the camera frame)
-          std::vector<cv::Point3f> ref_points = {
-            {-square_length / 2,  square_length / 2, 0},
-            { square_length / 2,  square_length / 2, 0},
-            { square_length / 2, -square_length / 2, 0},
-            {-square_length / 2, -square_length / 2, 0}
           };
 
           // Define camera intrinsic parameters
@@ -107,26 +122,22 @@ class DetectQR : public rclcpp::Node
           cv::Mat rot_mat;
           cv::Rodrigues(rvec, rot_mat);
 
-          // The pose of the square is given by the transformation matrix [R|t]
-          cv::Mat pose = cv::Mat::eye(4, 4, rot_mat.type());
-          rot_mat.copyTo(pose(cv::Rect(0, 0, 3, 3)));
-          tvec.copyTo(pose(cv::Rect(3, 0, 1, 3)));
+          // Adjust orientation for tf2
+          cv::Mat r;
+          euler_to_matrix(-M_PI/2, 0, -M_PI/2, r);
+          rot_mat = r * rot_mat;
 
           // The position of the square can be extracted from the pose matrix as follows:
-          cv::Point3f position(pose.at<double>(0, 3), pose.at<double>(1, 3), pose.at<double>(2, 3));
-
-          // The orientation of the square can be extracted using the rot_mat matrix as follows - green up, blue front:
-          cv::Mat r;
-          euler_to_matrix(M_PI/2, 0, -M_PI/2, r);
-
-          cv::Mat pose_R = r * rot_mat;
+          cv::Point3f position(tvec.at<double>(0, 0),
+                               tvec.at<double>(1, 0),
+                               tvec.at<double>(2, 0));
 
           // Convert the rotation matrix to a quaternion
           geometry_msgs::msg::Quaternion quat;
-          matrix_to_quat(pose_R, quat);
+          matrix_to_quat(rot_mat, quat);
 
           geometry_msgs::msg::TransformStamped tf_msg;
-          tf_msg.header.stamp = msg->header.stamp;
+          tf_msg.header.stamp = msg_img->header.stamp;
           tf_msg.header.frame_id = "kinect";
 
           // Set the transform message fields
@@ -142,27 +153,29 @@ class DetectQR : public rclcpp::Node
           // Publish the QR code poses
           world_info_msgs::msg::WorldInfo world_info_msg;
 
-          world_info_msg.header.stamp = msg->header.stamp;
+          world_info_msg.header.stamp = msg_img->header.stamp;
           world_info_msg.num = symbol->get_data();
-          world_info_msg.pose.position.x = position.x;
-          world_info_msg.pose.position.y = position.y;
-          world_info_msg.pose.position.z = position.z;
+          world_info_msg.pose.position.x = tf_msg.transform.translation.x;
+          world_info_msg.pose.position.y = tf_msg.transform.translation.y;
+          world_info_msg.pose.position.z = tf_msg.transform.translation.z;
           world_info_msg.pose.orientation = quat;
 
           // Publish the WorldInfo message
           world_info_pub_->publish(world_info_msg);
 
           // Draw lines around the QR code
-          cv::line(kinect_img, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(0, 255, 0), 2);
-          cv::line(kinect_img, cv::Point(x2, y2), cv::Point(x3, y3), cv::Scalar(0, 255, 0), 2);
-          cv::line(kinect_img, cv::Point(x3, y3), cv::Point(x4, y4), cv::Scalar(0, 255, 0), 2);
-          cv::line(kinect_img, cv::Point(x4, y4), cv::Point(x1, y1), cv::Scalar(0, 255, 0), 2);
+          cv::line(frame, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(0, 255, 0), 2);
+          cv::line(frame, cv::Point(x2, y2), cv::Point(x3, y3), cv::Scalar(0, 255, 0), 2);
+          cv::line(frame, cv::Point(x3, y3), cv::Point(x4, y4), cv::Scalar(0, 255, 0), 2);
+          cv::line(frame, cv::Point(x4, y4), cv::Point(x1, y1), cv::Scalar(0, 255, 0), 2);
 
           // Draw point at top left corner
-          cv::circle(kinect_img, cv::Point(x1, y1), 4, cv::Scalar(0, 0, 255), -1);
+          cv::circle(frame, cv::Point(x2, y2), 4, cv::Scalar(0, 0, 255), -1);
         }
-        cv::imshow("qrcode", kinect_img);
-        cv::waitKey(20);
+        // Display the frame
+        sensor_msgs::msg::Image::SharedPtr img_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", frame)
+                    .toImageMsg();
+        pub_qr.publish(*img_msg.get());
     }
     
     // Convert a rotation matrix to a quaternion
@@ -190,9 +203,12 @@ class DetectQR : public rclcpp::Node
     }
 
   zbar::ImageScanner scanner;
+  float square_length;
+  std::vector<cv::Point3f> ref_points;
 
   std::unique_ptr<tf2_ros::TransformBroadcaster> tfb_;
-  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub_;
+  const image_transport::Subscriber sub_cam;
+  const image_transport::Publisher pub_qr;
   rclcpp::Publisher<world_info_msgs::msg::WorldInfo>::SharedPtr world_info_pub_;
 };
 

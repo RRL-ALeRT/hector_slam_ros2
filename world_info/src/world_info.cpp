@@ -91,7 +91,6 @@ void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
   markers_pub->publish(marker_array);
   wi_vector.array.push_back(info);
   wi_pub->publish(wi_vector);
-  RCLCPP_INFO(node->get_logger(), "Data added");
 }
 
 

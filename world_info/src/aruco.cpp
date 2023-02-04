@@ -13,8 +13,6 @@
 #include "opencv2/aruco.hpp"
 #include <cv_bridge/cv_bridge.h>
 
-using namespace std;
-
 rcl_interfaces::msg::ParameterDescriptor
 descr(const std::string& description, const bool& read_only = false)
 {
@@ -37,7 +35,7 @@ class DetectAruco : public rclcpp::Node
       // sub_cam(image_transport::create_camera_subscription(this, "image_rect",
       //   std::bind(&DetectAruco::onCamera, this, std::placeholders::_1, std::placeholders::_2),
       //   declare_parameter("image_transport", "raw", descr({}, true)), rmw_qos_profile_sensor_data)),
-      sub_cam(image_transport::create_subscription(this, "/Spot/kinect_color",
+      sub_cam(image_transport::create_subscription(this, "image_rect",
         std::bind(&DetectAruco::onCamera, this, std::placeholders::_1),
         declare_parameter("image_transport", "raw", descr({}, true)), rmw_qos_profile_sensor_data)),
       pub_aruco(image_transport::create_publisher(this, "aruco_detected"))
@@ -46,16 +44,20 @@ class DetectAruco : public rclcpp::Node
       tf_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
       // Create WorldInfo publisher
-      world_info_pub_ = this->create_publisher<world_info_msgs::msg::WorldInfo>("/world_info_sub", 1);
+      world_info_pub_ = create_publisher<world_info_msgs::msg::WorldInfo>("/world_info_sub", 1);
 
       // For pose estimation
-      square_length = 0.25;
+      square_length = 0.2;
+      if(!has_parameter("aruco_square_length"))
+        declare_parameter("aruco_square_length", square_length);
+      get_parameter("aruco_square_length", square_length);
+
       ref_points = {
-            {-square_length / 2,  square_length / 2, 0},
-            { square_length / 2,  square_length / 2, 0},
-            { square_length / 2, -square_length / 2, 0},
-            {-square_length / 2, -square_length / 2, 0}
-          };
+        {-square_length / 2,  square_length / 2, 0},
+        { square_length / 2,  square_length / 2, 0},
+        { square_length / 2, -square_length / 2, 0},
+        {-square_length / 2, -square_length / 2, 0}
+      };
 
       // Create an Aruco detector
       dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_6X6_250);
@@ -124,7 +126,7 @@ class DetectAruco : public rclcpp::Node
         tf_msg.header.frame_id = "kinect";
 
         // Set the transform message fields
-        tf_msg.child_frame_id = "aruco_" + to_string(ids[i]);
+        tf_msg.child_frame_id = "aruco_" + std::to_string(ids[i]);
         tf_msg.transform.translation.x = position.z;
         tf_msg.transform.translation.y = -position.x;
         tf_msg.transform.translation.z = -position.y;
@@ -134,7 +136,7 @@ class DetectAruco : public rclcpp::Node
         world_info_msgs::msg::WorldInfo world_info_msg;
 
         world_info_msg.header.stamp = msg_img->header.stamp;
-        world_info_msg.num = to_string(ids[i]);
+        world_info_msg.num = std::to_string(ids[i]);
         world_info_msg.type = "aruco";
         world_info_msg.pose.position.x = tf_msg.transform.translation.x;
         world_info_msg.pose.position.y = tf_msg.transform.translation.y;
@@ -160,7 +162,7 @@ class DetectAruco : public rclcpp::Node
       tf_broadcaster->sendTransform(tfs);
 
       // Display the frame
-      img_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", frame)
+      sensor_msgs::msg::Image::SharedPtr img_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", frame)
                   .toImageMsg();
       pub_aruco.publish(*img_msg.get());
     }
@@ -203,7 +205,6 @@ class DetectAruco : public rclcpp::Node
   // const image_transport::CameraSubscriber sub_cam;
   const image_transport::Subscriber sub_cam;
   const image_transport::Publisher pub_aruco;
-  sensor_msgs::msg::Image::SharedPtr img_msg;
   rclcpp::Publisher<world_info_msgs::msg::WorldInfo>::SharedPtr world_info_pub_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster;
 };

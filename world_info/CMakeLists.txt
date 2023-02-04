@@ -32,7 +32,7 @@ add_executable(world_info src/world_info.cpp)
 ament_target_dependencies(world_info rclcpp world_info_msgs tf2_ros tf2_geometry_msgs)
 
 add_library(qrcode SHARED src/qrcode.cpp)
-ament_target_dependencies(qrcode rclcpp rclcpp_components world_info_msgs sensor_msgs Eigen3 OpenCV cv_bridge tf2_ros)
+ament_target_dependencies(qrcode rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport Eigen3 OpenCV cv_bridge tf2_ros)
 target_link_libraries (qrcode ${ZBAR_LIBRARIES} zbar)
 rclcpp_components_register_node(qrcode
 PLUGIN "world_info::DetectQR"
@@ -44,13 +44,19 @@ rclcpp_components_register_node(aruco
 PLUGIN "world_info::DetectAruco"
 EXECUTABLE aruco_node)
 
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME})
+
 install(TARGETS
-  world_info
   qrcode
   aruco
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
+  DESTINATION lib/${PROJECT_NAME})
+
+install(TARGETS
+  world_info
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
