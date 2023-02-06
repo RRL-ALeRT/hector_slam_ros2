@@ -17,12 +17,12 @@
 rcl_interfaces::msg::ParameterDescriptor
 descr(const std::string& description, const bool& read_only = false)
 {
-    rcl_interfaces::msg::ParameterDescriptor descr;
+  rcl_interfaces::msg::ParameterDescriptor descr;
 
-    descr.description = description;
-    descr.read_only = read_only;
+  descr.description = description;
+  descr.read_only = read_only;
 
-    return descr;
+  return descr;
 }
 
 namespace world_info
@@ -66,18 +66,20 @@ class DetectQR : public rclcpp::Node
     //               const sensor_msgs::msg::CameraInfo::ConstSharedPtr& msg_ci) # webots camera and info_msgs are not synced
     void onCamera(const sensor_msgs::msg::Image::ConstSharedPtr& msg_img)
     {
-        // Convert the image message to a cv::Mat object
-        cv::Mat frame;
-        try
-        {
-            frame =  cv_bridge::toCvShare(msg_img, "bgr8")->image;
-        }
-        catch (cv_bridge::Exception &e)
-        {
-            RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
-            return;
-        }
+      // Convert the image message to a cv::Mat object
+      cv::Mat frame;
+      try
+      {
+          frame =  cv_bridge::toCvShare(msg_img, "bgr8")->image;
+      }
+      catch (cv_bridge::Exception &e)
+      {
+          RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
+          return;
+      }
 
+      try
+      {
         // Convert the image to grayscale
         cv::Mat image_gray;
         cv::cvtColor(frame, image_gray, cv::COLOR_BGR2GRAY);
@@ -129,8 +131,8 @@ class DetectQR : public rclcpp::Node
 
           // The position of the square can be extracted from the pose matrix as follows:
           cv::Point3f position(tvec.at<double>(0, 0),
-                               tvec.at<double>(1, 0),
-                               tvec.at<double>(2, 0));
+                              tvec.at<double>(1, 0),
+                              tvec.at<double>(2, 0));
 
           // Convert the rotation matrix to a quaternion
           geometry_msgs::msg::Quaternion quat;
@@ -172,10 +174,16 @@ class DetectQR : public rclcpp::Node
           // Draw point at top left corner
           cv::circle(frame, cv::Point(x2, y2), 4, cv::Scalar(0, 0, 255), -1);
         }
-        // Display the frame
-        sensor_msgs::msg::Image::SharedPtr img_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", frame)
-                    .toImageMsg();
-        pub_qr.publish(*img_msg.get());
+      }
+      catch (cv::Exception &e)
+      {
+        RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
+        return;
+      }
+      // Display the frame
+      sensor_msgs::msg::Image::SharedPtr img_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", frame)
+                  .toImageMsg();
+      pub_qr.publish(*img_msg.get());
     }
     
     // Convert a rotation matrix to a quaternion
@@ -190,7 +198,7 @@ class DetectQR : public rclcpp::Node
       quat.y = tf_quat.y();
       quat.z = tf_quat.z();
       quat.w = tf_quat.w();
-    };
+    }
 
     // Convert Euler angles (roll, pitch, yaw) to a rotation matrix
     void euler_to_matrix(double roll, double pitch, double yaw, cv::Mat& rot_mat)

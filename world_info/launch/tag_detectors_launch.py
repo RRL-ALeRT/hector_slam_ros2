@@ -26,6 +26,22 @@ def generate_launch_description():
                     parameters=[{'qr_square_length': 0.85*0.3}],
                     remappings=[('/image_rect', '/Spot/kinect_color')],
                 ),
+                ComposableNode(
+                    package='world_info',
+                    plugin='world_info::DetectHazmat',
+                    name='hazmat_node',
+                    parameters=[{'hazmat_confidence_threshold': 0.9},
+                                {'inference_mode': "GPU"}],
+                    remappings=[('/image_rect', '/Spot/kinect_color')],
+                ),
+                ComposableNode(
+                    package='world_info',
+                    plugin='world_info::DetectBabyface',
+                    name='babyface_node',
+                    parameters=[{'babyface_confidence_threshold': 0.9},
+                                {'inference_mode': "GPU"}],
+                    remappings=[('/image_rect', '/Spot/kinect_color')],
+                ),
                 # Images from webots aren't synchronised, work with this later if required*. for other tags temporary hax
                 # ComposableNode(
                 #     package='apriltag_ros',
