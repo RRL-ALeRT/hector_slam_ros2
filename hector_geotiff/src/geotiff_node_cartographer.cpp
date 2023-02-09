@@ -43,6 +43,7 @@
 #include <nav_msgs/srv/get_map.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <hector_nav_msgs/srv/get_robot_trajectory.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 #include "world_info_msgs/msg/world_info_array.hpp"
 
 #include <QApplication>
@@ -73,9 +74,8 @@ public:
     sys_cmd_sub_ = node_->create_subscription<std_msgs::msg::String>("syscommand", 1, std::bind(&MapGenerator::sysCmdCallback, this, std::placeholders::_1));
     world_info_sub_ = node_->create_subscription<world_info_msgs::msg::WorldInfoArray>("world_info_array", 1, std::bind(&MapGenerator::saveMapInfoCallback, this, std::placeholders::_1));
 
-    map_service_client_ = node_->create_client<nav_msgs::srv::GetMap>("map");
-    //object_service_client_ = n_.serviceClient<worldmodel_msgs::GetObjectModel>("worldmodel/get_object_model");
-    path_service_client_ = node_->create_client<hector_nav_msgs::srv::GetRobotTrajectory>("trajectory");
+    map_sub_ = node_->create_subscription<nav_msgs::msg::OccupancyGrid>("map", 1, std::bind(&MapGenerator::mapCallback, this, std::placeholders::_1));
+    trajectory_sub_ = node_->create_subscription<visualization_msgs::msg::MarkerArray>("/trajectory_node_list", 1, std::bind(&MapGenerator::trajectoryCallback, this, std::placeholders::_1));
 
     auto p_geotiff_save_period = node_->declare_parameter("geotiff_save_period", 30.0);
 
@@ -115,178 +115,70 @@ public:
 
   ~MapGenerator() = default;
 
-  void map_queue_async_request()
-  {
-    while (!map_service_client_->wait_for_service(1s)) {
-      if (!rclcpp::ok()) {
-        RCLCPP_ERROR(node_->get_logger(), "Interrupted while waiting for the service. Exiting.");
-        return;
-      }
-      RCLCPP_INFO(node_->get_logger(), "map service not available, waiting again...");
-    }
-    auto request = std::make_shared<nav_msgs::srv::GetMap::Request>();
-
-    // We give the async_send_request() method a callback that will get executed once the response
-    // is received.
-    // This way we can return immediately from this method and allow other work to be done by the
-    // executor in `spin` while waiting for the response.
-    using ServiceResponseFuture =
-      rclcpp::Client<nav_msgs::srv::GetMap>::SharedFuture;
-    auto response_received_callback = [this](ServiceResponseFuture future) {
-        auto result = future.get();
-        map = result.get()->map;
-        if (path.size() > 0)
-          this->writeGeotiff(false);
-      };
-    auto future_result = map_service_client_->async_send_request(request, response_received_callback);
-  }
-
-  void path_queue_async_request()
-  {
-    while (!path_service_client_->wait_for_service(1s)) {
-      if (!rclcpp::ok()) {
-        RCLCPP_ERROR(node_->get_logger(), "Interrupted while waiting for the service. Exiting.");
-        return;
-      }
-      RCLCPP_INFO(node_->get_logger(), "path service not available, waiting again...");
-    }
-    auto request = std::make_shared<hector_nav_msgs::srv::GetRobotTrajectory::Request>();
-
-    // We give the async_send_request() method a callback that will get executed once the response
-    // is received.
-    // This way we can return immediately from this method and allow other work to be done by the
-    // executor in `spin` while waiting for the response.
-    using ServiceResponseFuture =
-      rclcpp::Client<hector_nav_msgs::srv::GetRobotTrajectory>::SharedFuture;
-    auto response_received_callback = [this](ServiceResponseFuture future) {
-        auto result = future.get();
-        path = result.get()->trajectory.poses;
-        if (map.data.size() > 0)
-          this->writeGeotiff(false);
-      };
-    auto future_result = path_service_client_->async_send_request(request, response_received_callback);
-  }
-
   void writeGeotiff(bool completed)
   {
     auto start_time = node_->get_clock()->now().seconds();
 
-    if (map.data.size() > 0 && path.size() > 0)
-    {
-      RCLCPP_INFO(node_->get_logger(), "GeotiffNode: Map service called successfully");
+    RCLCPP_INFO(node_->get_logger(), "GeotiffNode: Map service called successfully");
 
-      std::string map_file_name = p_map_file_base_name_;
-      std::string competition_name;
-      std::string team_name;
-      std::string mission_name;
-      std::string postfix;
-      // if (n_.getParamCached("/competition", competition_name) && !competition_name.empty()) map_file_name = map_file_name + "_" + competition_name;
-      // if (n_.getParamCached("/team", team_name)               && !team_name.empty())        map_file_name = map_file_name + "_" + team_name;
-      // if (n_.getParamCached("/mission", mission_name)         && !mission_name.empty())     map_file_name = map_file_name + "_" + mission_name;
-      // if (pn_.getParamCached("map_file_postfix", postfix)     && !postfix.empty())          map_file_name = map_file_name + "_" + postfix;
-      // if (map_file_name.substr(0, 1) == "_") map_file_name = map_file_name.substr(1);
-      if (map_file_name.empty()) map_file_name = "GeoTiffMap";
-      geotiff_writer_.setMapFileName(map_file_name);
-      bool transformSuccess = geotiff_writer_.setupTransforms(map);
+    std::string map_file_name = p_map_file_base_name_;
+    std::string competition_name;
+    std::string team_name;
+    std::string mission_name;
+    std::string postfix;
+    if (map_file_name.empty()) map_file_name = "GeoTiffMap";
+    geotiff_writer_.setMapFileName(map_file_name);
+    bool transformSuccess = geotiff_writer_.setupTransforms(map);
 
-      if(!transformSuccess){
-        RCLCPP_INFO(node_->get_logger(), "Couldn't set map transform");
-        return;
-      }
-
-      geotiff_writer_.setupImageSize();
-
-      if (p_draw_background_checkerboard_){
-        geotiff_writer_.drawBackgroundCheckerboard();
-      }
-
-      geotiff_writer_.drawMap(map, p_draw_free_space_grid_);
-     
-      for (int i = 0; i < wi_array.array.size(); i++) {
-        geotiff_writer_.drawObjectOfInterest(Eigen::Vector2f(
-          wi_array.array[i].pose.position.x, wi_array.array[i].pose.position.y),
-          wi_array.array[i].num, Eigen::Vector3f(240,10,10), "CIRCLE");
-      }
-
-      geotiff_writer_.drawCoords();
-
-      geotiff_writer_.completed_map_ = completed;
-
-      RCLCPP_INFO(node_->get_logger(), "Writing geotiff plugins");
-      for (size_t i = 0; i < plugin_vector_.size(); ++i){
-        plugin_vector_[i]->draw(&geotiff_writer_);
-      }
-
-      RCLCPP_INFO(node_->get_logger(), "Writing geotiff");
-
-      /**
-        * No Victims for now, first  agree on a common standard for representation
-        */
-      /*
-      if (req_object_model_){
-        worldmodel_msgs::GetObjectModel srv_objects;
-        if (object_service_client_.call(srv_objects))
-        {
-          // ROS_INFO("GeotiffNode: Object service called successfully");
-
-          const worldmodel_msgs::ObjectModel& objects_model (srv_objects.response.model);
-
-          size_t size = objects_model.objects.size();
-
-          unsigned int victim_num  = 1;
-
-          for (size_t i = 0; i < size; ++i){
-            const worldmodel_msgs::Object& object (objects_model.objects[i]);
-
-            if (object.state.state == worldmodel_msgs::ObjectState::CONFIRMED){
-              geotiff_writer_.drawVictim(Eigen::Vector2f(object.pose.pose.position.x,object.pose.pose.position.y),victim_num);
-              victim_num++;
-            }
-          }
-        }
-        else
-        {
-          // ROS_ERROR("Failed to call objects service");
-        }
-      }
-      */
-
-      // ROS_INFO("GeotiffNode: Path service called successfully");
-
-      auto traj_vector = path;
-      size_t size = traj_vector.size();
-
-      std::vector<Eigen::Vector2f> pointVec;
-      pointVec.resize(size);
-
-      for (size_t i = 0; i < size; ++i){
-        const geometry_msgs::msg::PoseStamped& pose (traj_vector[i]);
-
-        pointVec[i] = Eigen::Vector2f(pose.pose.position.x, pose.pose.position.y);
-      }
-
-      if (size > 0){
-        //Eigen::Vector3f startVec(pose_vector[0].x,pose_vector[0].y,pose_vector[0].z);
-        Eigen::Vector3f startVec(pointVec[0].x(),pointVec[0].y(),0.0f);
-        geotiff_writer_.drawPath(startVec, pointVec);
-      }
-      
-      geotiff_writer_.writeGeotiffImage(completed);
-      running_saved_map_num_++;
-
-      auto elapsed_time = node_->get_clock()->now().seconds() - start_time;
-
-      RCLCPP_INFO(node_->get_logger(), "GeoTiff created in %f seconds", elapsed_time);
-      
-      map = empty_map;
-      path = empty_path;
+    if(!transformSuccess){
+      RCLCPP_INFO(node_->get_logger(), "Couldn't set map transform");
+      return;
     }
+
+    geotiff_writer_.setupImageSize();
+
+    if (p_draw_background_checkerboard_){
+      geotiff_writer_.drawBackgroundCheckerboard();
+    }
+
+    geotiff_writer_.drawMap(map, p_draw_free_space_grid_);
+    
+    for (int i = 0; i < wi_array.array.size(); i++) {
+      geotiff_writer_.drawObjectOfInterest(Eigen::Vector2f(
+        wi_array.array[i].pose.position.x, wi_array.array[i].pose.position.y),
+        wi_array.array[i].num, Eigen::Vector3f(240,10,10), "CIRCLE");
+    }
+
+    geotiff_writer_.drawCoords();
+
+    geotiff_writer_.completed_map_ = completed;
+
+    RCLCPP_INFO(node_->get_logger(), "Writing geotiff plugins");
+    for (size_t i = 0; i < plugin_vector_.size(); ++i){
+      plugin_vector_[i]->draw(&geotiff_writer_);
+    }
+
+    RCLCPP_INFO(node_->get_logger(), "Writing geotiff");
+    
+    geotiff_writer_.drawPath(startVec, pointVec);
+    
+    geotiff_writer_.writeGeotiffImage(completed);
+    running_saved_map_num_++;
+
+    auto elapsed_time = node_->get_clock()->now().seconds() - start_time;
+
+    RCLCPP_INFO(node_->get_logger(), "GeoTiff created in %f seconds", elapsed_time);
+    
+    map = empty_map;
+    pointVec = empty_pointVec;
   }
 
   void timerSaveGeotiffCallback()
   {
-    map_queue_async_request();
-    path_queue_async_request();
+    if (map != empty_map && pointVec != empty_pointVec)
+      this->writeGeotiff(false);
+    else
+      RCLCPP_INFO(node_->get_logger(), "Failed to get map or trajectory");
   }
 
   void sysCmdCallback(const std_msgs::msg::String& sys_cmd)
@@ -298,9 +190,34 @@ public:
     this->writeGeotiff(true);
   }
 
+  void mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr map_msg)
+  {
+    map = *map_msg;
+  }
+
+  void trajectoryCallback(const visualization_msgs::msg::MarkerArray::SharedPtr marker_array_msg)
+  {
+    auto marker_array = marker_array_msg->markers;
+    int num_markers = marker_array.size();
+    pointVec = empty_pointVec;
+
+    for (int i = 0; i < num_markers; i++) {
+      int num_points = marker_array[i].points.size();
+      if (marker_array[i].ns == "Trajectory 0" && marker_array[i].id == 0 && num_points > 0) {
+        startVec[0] = marker_array[i].points[0].x;
+        startVec[1] = marker_array[i].points[0].y;
+      }
+      if (marker_array[i].ns == "Trajectory 0" && marker_array[i].id == 1 || marker_array[i].id == 2 && num_points > 0) {
+        for (int j = 0; j < num_points; j++) {
+          pointVec.push_back(Eigen::Vector2f(marker_array[i].points[j].x, marker_array[i].points[j].y));
+        }
+      }
+    }
+  }
+
   void saveMapInfoCallback(const world_info_msgs::msg::WorldInfoArray& array)
   {
-    RCLCPP_INFO(node_->get_logger(), "Got mesg from World Info");
+    RCLCPP_INFO(node_->get_logger(), "Got msg from World Info");
     wi_array = array;
     this->writeGeotiff(false);
   }
@@ -312,7 +229,6 @@ public:
   bool p_draw_free_space_grid_;
 
   std::unique_ptr<pluginlib::ClassLoader<hector_geotiff::MapWriterPluginInterface>> plugin_loader_;
-  // std::vector<boost::shared_ptr<hector_geotiff::MapWriterPluginInterface> > plugin_vector_;
   std::vector<std::shared_ptr<hector_geotiff::MapWriterPluginInterface>> plugin_vector_;
   
   rclcpp::Node::SharedPtr node_;
@@ -325,6 +241,8 @@ public:
 
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sys_cmd_sub_;
   rclcpp::Subscription<world_info_msgs::msg::WorldInfoArray>::SharedPtr world_info_sub_;
+  rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
+  rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr trajectory_sub_;
   rclcpp::Client<nav_msgs::srv::GetMap>::SharedPtr map_service_client_;
   rclcpp::Client<hector_nav_msgs::srv::GetRobotTrajectory>::SharedPtr path_service_client_;
   rclcpp::TimerBase::SharedPtr map_save_timer_;
@@ -332,6 +250,8 @@ public:
 
   nav_msgs::msg::OccupancyGrid map, empty_map;
   std::vector<geometry_msgs::msg::PoseStamped> path, empty_path;
+  std::vector<Eigen::Vector2f> pointVec, empty_pointVec;
+  Eigen::Vector3f startVec;
 };
 
 }

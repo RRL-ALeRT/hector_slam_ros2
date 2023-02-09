@@ -49,7 +49,7 @@ ament_target_dependencies(geotiff_node rclcpp pluginlib hector_nav_msgs world_in
 
 add_executable(geotiff_node_cartographer src/geotiff_node_cartographer.cpp)
 target_link_libraries(geotiff_node_cartographer geotiff_writer)
-ament_target_dependencies(geotiff_node_cartographer rclcpp pluginlib hector_nav_msgs world_info_msgs)
+ament_target_dependencies(geotiff_node_cartographer rclcpp pluginlib hector_nav_msgs world_info_msgs visualization_msgs)
 
 #############
 ## Install ##
