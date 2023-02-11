@@ -1,7 +1,6 @@
 
 #include "rclcpp/rclcpp.hpp"
 
-#include "geometry_msgs/msg/pose_stamped.hpp"
 #include "world_info_msgs/msg/world_info.hpp"
 #include "world_info_msgs/msg/world_info_array.hpp"
 #include "visualization_msgs/msg/marker.hpp"
@@ -14,71 +13,114 @@
 
 rclcpp::Node::SharedPtr node;
 world_info_msgs::msg::WorldInfo info;
-world_info_msgs::msg::WorldInfoArray wi_vector;
-visualization_msgs::msg::MarkerArray marker_array;
 rclcpp::Publisher<world_info_msgs::msg::WorldInfoArray>::SharedPtr wi_pub;
 rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_pub;
-
-geometry_msgs::msg::PoseStamped wrt_kinect;
 
 std::unique_ptr<tf2_ros::Buffer> tf_;
 std::shared_ptr<tf2_ros::TransformListener> tfL_{nullptr};
 
-geometry_msgs::msg::PoseStamped transform_pose(rclcpp::Node::SharedPtr tp_node, geometry_msgs::msg::PoseStamped in, std::string target_frame) {
-  geometry_msgs::msg::PoseStamped out;
-  if (tf_->canTransform(target_frame, in.header.frame_id, tp_node->get_clock()->now(), rclcpp::Duration::from_seconds(0.5)))
-  {
-    auto source_to_target = tf_->lookupTransform(in.header.frame_id, target_frame, in.header.stamp);
-    tf2::Transform t_source_to_target(
-      tf2::Matrix3x3(tf2::Quaternion(
-        source_to_target.transform.rotation.x,source_to_target.transform.rotation.y,source_to_target.transform.rotation.z,source_to_target.transform.rotation.w)),
-      tf2::Vector3(source_to_target.transform.translation.x, source_to_target.transform.translation.y, source_to_target.transform.translation.z)
-    );
+struct PoseCount
+{
+  world_info_msgs::msg::WorldInfo info;
+  int count;
+};
 
-    auto t_position = t_source_to_target.inverse()*(tf2::Vector3(in.pose.position.x, in.pose.position.y, in.pose.position.z));
-    auto t_orientation = t_source_to_target.inverse()*(tf2::Quaternion(in.pose.orientation.x, in.pose.orientation.y, in.pose.orientation.z, in.pose.orientation.w));
-    out.pose.position.x = t_position.getX();
-    out.pose.position.y = t_position.getY();
-    out.pose.position.z = t_position.getZ();
-    out.pose.orientation.x = t_orientation.getX();
-    out.pose.orientation.y = t_orientation.getY();
-    out.pose.orientation.z = t_orientation.getZ();
-    out.pose.orientation.w = t_orientation.getW();
-    out.header.stamp = in.header.stamp;
-    out.header.frame_id = target_frame;
-  }
-  return out;
+std::unordered_map<std::string, PoseCount> apriltag_dict;
+
+void transform_pose(const rclcpp::Node::SharedPtr tp_node, world_info_msgs::msg::WorldInfo& in, std::string target_frame) {
+  auto source_to_target = tf_->lookupTransform(in.header.frame_id, target_frame, in.header.stamp, rclcpp::Duration::from_seconds(0.5));
+  tf2::Transform t_source_to_target(
+    tf2::Matrix3x3(tf2::Quaternion(
+      source_to_target.transform.rotation.x,source_to_target.transform.rotation.y,source_to_target.transform.rotation.z,source_to_target.transform.rotation.w)),
+    tf2::Vector3(source_to_target.transform.translation.x, source_to_target.transform.translation.y, source_to_target.transform.translation.z)
+  );
+
+  auto t_position = t_source_to_target.inverse()*(tf2::Vector3(in.pose.position.x, in.pose.position.y, in.pose.position.z));
+  auto t_orientation = t_source_to_target.inverse()*(tf2::Quaternion(in.pose.orientation.x, in.pose.orientation.y, in.pose.orientation.z, in.pose.orientation.w));
+  in.pose.position.x = t_position.getX();
+  in.pose.position.y = t_position.getY();
+  in.pose.position.z = t_position.getZ();
+  in.pose.orientation.x = t_orientation.getX();
+  in.pose.orientation.y = t_orientation.getY();
+  in.pose.orientation.z = t_orientation.getZ();
+  in.pose.orientation.w = t_orientation.getW();
+  in.header.frame_id = target_frame;
+}
+
+void add_to_mean(geometry_msgs::msg::Pose& mean, const geometry_msgs::msg::Pose newPose, int& numPoses) {
+  // Update position mean
+  mean.position.x = (mean.position.x * numPoses + newPose.position.x) / (numPoses + 1);
+  mean.position.y = (mean.position.y * numPoses + newPose.position.y) / (numPoses + 1);
+  mean.position.z = (mean.position.z * numPoses + newPose.position.z) / (numPoses + 1);
+
+  // Update orientation mean
+  mean.orientation.x = (mean.orientation.x * numPoses + newPose.orientation.x) / (numPoses + 1);
+  mean.orientation.y = (mean.orientation.y * numPoses + newPose.orientation.y) / (numPoses + 1);
+  mean.orientation.z = (mean.orientation.z * numPoses + newPose.orientation.z) / (numPoses + 1);
+  mean.orientation.w = (mean.orientation.w * numPoses + newPose.orientation.w) / (numPoses + 1);
+
+  // Normalize the quaternion
+  double norm = sqrt(
+      mean.orientation.x * mean.orientation.x
+    + mean.orientation.y * mean.orientation.y
+    + mean.orientation.z * mean.orientation.z
+    + mean.orientation.w * mean.orientation.w);
+  mean.orientation.x /= norm;
+  mean.orientation.y /= norm;
+  mean.orientation.z /= norm;
+  mean.orientation.w /= norm;
+
+  numPoses++;
 }
 
 void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
 {
   info = *msg;
+
+  // Save whatever info we have in apriltag_dict(unordered_map) wrt map
   if (info.type == "apriltag") {
-    // Check in reverse order if incoming tag is already loaded.
-    for(int i=wi_vector.array.size()-1; i>=0; i--) {
-      if (wi_vector.array[i].type == info.type && wi_vector.array[i].num == info.num)
+
+    if (apriltag_dict.find(info.num) != apriltag_dict.end())
+      if (apriltag_dict[info.num].count >= 1000)
         return;
+
+    info.header.frame_id = "kinect"; // no frame_id named kinect_color ::face_palm
+
+    try {
+      transform_pose(node, info, "map");
     }
-    info.header.frame_id = "kinect";
-    wrt_kinect.header = info.header;
-    wrt_kinect.pose = info.pose;
-
-    auto wrt_map = transform_pose(node, wrt_kinect, "map");
-    if (!wrt_map.header.stamp.sec)
+    catch (tf2::ConnectivityException& e) {
+      RCLCPP_WARN(node->get_logger(), e.what());
       return;
+    }
+    catch (tf2::ExtrapolationException& e) {
+      RCLCPP_WARN(node->get_logger(), e.what());
+      return;
+    }
+    catch (tf2::LookupException& e) {
+      RCLCPP_WARN(node->get_logger(), e.what());
+      return;
+    }
+    
+    if (apriltag_dict.find(info.num) == apriltag_dict.end())
+      apriltag_dict[info.num] = PoseCount{info, 1}; // First time
+    else
+      add_to_mean(apriltag_dict[info.num].info.pose, info.pose, apriltag_dict[info.num].count);
+  }
 
-    info.header = wrt_map.header;
-    info.pose = wrt_map.pose;
-
+  // get rviz2 markers and tag_locations from apriltag_dict 
+  visualization_msgs::msg::MarkerArray marker_array;
+  world_info_msgs::msg::WorldInfoArray wi_vector;
+  for (auto it = apriltag_dict.begin(); it != apriltag_dict.end(); ++it) {
     uint32_t shape = visualization_msgs::msg::Marker::CUBE;
     visualization_msgs::msg::Marker marker;
-    marker.header = info.header;
+    marker.header = it->second.info.header;
     marker.header.frame_id = "map";
     marker.ns = "apriltag";
-    marker.id = wi_vector.array.size()+1;
+    marker.id = marker_array.markers.size()+1;
     marker.type = shape;
     marker.action = visualization_msgs::msg::Marker::ADD;
-    marker.pose = info.pose;
+    marker.pose = it->second.info.pose;
     marker.scale.x = 0.2;
     marker.scale.y = 0.2;
     marker.scale.z = 0.2;
@@ -87,9 +129,11 @@ void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
     marker.color.b = 0.0f;
     marker.color.a = 1.0f;
     marker_array.markers.push_back(marker);
+
+    wi_vector.array.push_back(it->second.info);
   }
+
   markers_pub->publish(marker_array);
-  wi_vector.array.push_back(info);
   wi_pub->publish(wi_vector);
 }
 
