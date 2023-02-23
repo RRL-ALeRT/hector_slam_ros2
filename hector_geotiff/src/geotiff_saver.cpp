@@ -56,25 +56,19 @@ class GeotiffSaver
     {
       auto marker_array = path->markers;
       int num_markers = marker_array.size();
+
       for (int i = 0; i < num_markers; i++) {
-        auto num_points = marker_array[i].points.size();
-
-        if (marker_array[i].ns == "slam_toolbox_edges" && num_points > 0) {
-          startVec[0] = marker_array[i].points[0].x;
-          startVec[1] = marker_array[i].points[0].y;
-
-          pointVec.resize(num_points);
-          for (long unsigned int j = 0; j < num_points; j++) {
-            pointVec[j] = Eigen::Vector2f(marker_array[i].points[j].x, marker_array[i].points[j].y);
-          }
+        if (marker_array[i].ns == "slam_toolbox") {
+        
+          pointVec.push_back(Eigen::Vector2f(marker_array[i].pose.position.x, marker_array[i].pose.position.y));
 
           RCLCPP_INFO(node_->get_logger(), "Path loaded.");
-          path_loaded = true;
-
-          if (map_loaded)
-            saveMap ();
         }
       }
+      path_loaded = true;
+
+      if (map_loaded)
+        saveMap ();
     };
 
     void mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr map_msg)
@@ -88,6 +82,9 @@ class GeotiffSaver
     void saveMap () {
         RCLCPP_INFO(node_->get_logger(), "Map loaded.");
         hector_geotiff::GeotiffWriter geotiff_writer(false);
+
+        startVec[0] = pointVec[0][0];
+        startVec[1] = pointVec[0][1];
 
         geotiff_writer.setMapFileName(map_name_);
         geotiff_writer.setupTransforms(map);
