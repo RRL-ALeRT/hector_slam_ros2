@@ -16,13 +16,22 @@ world_info_msgs::msg::WorldInfo info;
 rclcpp::Publisher<world_info_msgs::msg::WorldInfoArray>::SharedPtr wi_pub;
 rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_pub;
 
+visualization_msgs::msg::MarkerArray marker_array, empty_marker_array;
+world_info_msgs::msg::WorldInfoArray wi_vector, empty_wi_vector;
+
 std::unique_ptr<tf2_ros::Buffer> tf_;
 std::shared_ptr<tf2_ros::TransformListener> tfL_{nullptr};
+
+int id_count = 1;
 
 struct PoseCount
 {
   world_info_msgs::msg::WorldInfo info;
   int count;
+  int id;
+  std::string time;
+  std::string robot;
+  std::string mode;
 };
 
 std::unordered_map<std::string, PoseCount> apriltag_dict;
@@ -102,15 +111,23 @@ void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
       return;
     }
     
+    auto t = std::time(nullptr);
+    auto tm = *std::localtime(&t);
+
+    std::ostringstream oss;
+    oss << std::put_time(&tm, "%H:%M:%S");
+    std::string time_str = oss.str();
+
     if (apriltag_dict.find(info.num) == apriltag_dict.end())
-      apriltag_dict[info.num] = PoseCount{info, 1}; // First time
+      apriltag_dict[info.num] = PoseCount{info, 1, id_count++, time_str, std::string("Spot"), std::string("T")}; // First time
     else
       add_to_mean(apriltag_dict[info.num].info.pose, info.pose, apriltag_dict[info.num].count);
   }
 
-  // get rviz2 markers and tag_locations from apriltag_dict 
-  visualization_msgs::msg::MarkerArray marker_array;
-  world_info_msgs::msg::WorldInfoArray wi_vector;
+  // get rviz2 markers and tag_locations from apriltag_dict
+  marker_array = empty_marker_array;
+  wi_vector = empty_wi_vector;
+
   for (auto it = apriltag_dict.begin(); it != apriltag_dict.end(); ++it) {
     uint32_t shape = visualization_msgs::msg::Marker::CUBE;
     visualization_msgs::msg::Marker marker;
@@ -131,12 +148,21 @@ void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
     marker_array.markers.push_back(marker);
 
     wi_vector.array.push_back(it->second.info);
+    wi_vector.id_array.push_back(it->second.id);
+    wi_vector.time_array.push_back(it->second.time);
+    wi_vector.robot_array.push_back(it->second.robot);
+    wi_vector.mode_array.push_back(it->second.mode);
   }
 
   markers_pub->publish(marker_array);
   wi_pub->publish(wi_vector);
 }
 
+void statusTimer()
+{
+  markers_pub->publish(marker_array);
+  wi_pub->publish(wi_vector);
+}
 
 int main(int argc, char **argv) {
 
@@ -147,6 +173,7 @@ int main(int argc, char **argv) {
   auto sub = node->create_subscription<world_info_msgs::msg::WorldInfo>("world_info_sub", 1, &receive_info);
   wi_pub = node->create_publisher<world_info_msgs::msg::WorldInfoArray>("world_info_array", 1);
   markers_pub = node->create_publisher<visualization_msgs::msg::MarkerArray>("visualization_marker_array", 1);
+  auto status_timer_ = node->create_wall_timer(std::chrono::milliseconds(10), &statusTimer);
 
   double tmp_val = 30;
   tf_ = std::make_unique<tf2_ros::Buffer>(node->get_clock(),

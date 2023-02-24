@@ -41,7 +41,7 @@ ament_target_dependencies(geotiff_writer rclcpp nav_msgs hector_map_tools ament_
 
 add_executable(geotiff_saver src/geotiff_saver.cpp)
 target_link_libraries(geotiff_saver geotiff_writer)
-ament_target_dependencies(geotiff_saver rclcpp nav_msgs visualization_msgs)
+ament_target_dependencies(geotiff_saver rclcpp nav_msgs visualization_msgs world_info_msgs)
 
 add_executable(geotiff_node src/geotiff_node.cpp)
 target_link_libraries(geotiff_node geotiff_writer)
