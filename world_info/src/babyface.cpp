@@ -8,6 +8,10 @@
 #include <world_info_msgs/msg/world_info.hpp>
 #include <ament_index_cpp/get_package_share_directory.hpp>
 
+#include <world_info_msgs/srv/get_median_depth_xyz.hpp>
+
+#include "tf2_ros/transform_broadcaster.h"
+
 rcl_interfaces::msg::ParameterDescriptor
 descr(const std::string &description, const bool &read_only = false)
 {
@@ -21,6 +25,9 @@ descr(const std::string &description, const bool &read_only = false)
 
 namespace world_info
 {
+using GetMedianDepthXYZ = world_info_msgs::srv::GetMedianDepthXYZ;
+using ServiceResponseFuture = rclcpp::Client<GetMedianDepthXYZ>::SharedFuture;
+
     cv::Mat letterbox(cv::Mat &img, std::vector<float> &paddings, std::vector<int> new_shape = { 640, 640 })
     {
        	// Get current image shape[height, width]
@@ -114,12 +121,24 @@ namespace world_info
             declare_parameter("image_transport", "raw", descr( {}, true)), rmw_qos_profile_sensor_data)),
         pub_babyface(image_transport::create_publisher(this, "babyface_detected"))
         {
+            // Initialize TransformBroadcaster
+            tfb_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
+
            	// Create WorldInfo publisher
             world_info_pub_ = create_publisher<world_info_msgs::msg::WorldInfo>("/world_info_sub", 1);
 
+            median_xyz_client_ = create_client<GetMedianDepthXYZ>("get_median_depth_xyz");
+            while (!median_xyz_client_->wait_for_service(std::chrono::seconds(1))) {
+                if (!rclcpp::ok()) {
+                    RCLCPP_ERROR(get_logger(), "Interrupted while waiting for the service. Exiting.");
+                    return;
+                }
+                RCLCPP_INFO(get_logger(), "service from rs_depth not available, waiting again...");
+            }
+
             SCORE_THRESHOLD = 0.2;
             NMS_THRESHOLD = 0.4;
-            CONFIDENCE_THRESHOLD = 0.8;
+            CONFIDENCE_THRESHOLD = 0.7;
             num_classes = 1;
 
             if (!has_parameter("babyface_confidence_threshold"))
@@ -302,6 +321,57 @@ namespace world_info
                     std::string label = std::to_string(class_id) + ":" + std::to_string(class_scores[index]);
                     cv::putText(img, label, cv::Point(boxes[index].tl().x, boxes[index].tl().y - 10), cv::FONT_HERSHEY_SIMPLEX, .5, colors[class_id % 6]);
                     cv::addWeighted(img, 0.8, rgb_mask, 0.2, 0, img);
+
+                    // Mask to x-y points
+                    auto request = std::make_shared<GetMedianDepthXYZ::Request>();
+                    request->header = msg_img->header;
+                    request->x = {box.x, box.x + box.width};
+                    request->y = {box.y, box.y + box.y + box.height};
+                    // for (int j = 0; j < mask.rows; j++) {
+                    //     for (int i = 0; i < mask.cols; i++) {
+                    //         if (mask.at<uchar>(i, j) != 0) {
+                    //             request->x.push_back(i);
+                    //             request->y.push_back(j);
+                    //         }
+                    //     }
+                    // }
+                    
+                    auto response_received_callback = [this,msg_img](ServiceResponseFuture future) {
+                        auto result = future.get();
+                        if (std::isnan(result.get()->x) || std::isnan(result.get()->y) || std::isnan(result.get()->z))
+                            return;
+                        if (std::isinf(result.get()->x) || std::isinf(result.get()->y) || std::isinf(result.get()->z))
+                            return;
+                        if (result.get()->x == 0 & result.get()->y == 0 & result.get()->z == 0)
+                            return;
+
+                        geometry_msgs::msg::TransformStamped tf_msg;
+                        tf_msg.header.stamp = msg_img->header.stamp;
+                        tf_msg.header.frame_id = "kinect";
+
+                        // Set the transform message fields
+                        tf_msg.child_frame_id = "victim";
+                        tf_msg.transform.translation.x = result.get()->z;
+                        tf_msg.transform.translation.y = -result.get()->x;
+                        tf_msg.transform.translation.z = -result.get()->y;
+
+                        // Publish the transform message
+                        tfb_->sendTransform(tf_msg);
+
+                        // Publish the QR code poses
+                        world_info_msgs::msg::WorldInfo world_info_msg;
+
+                        world_info_msg.header.stamp = msg_img->header.stamp;
+                        world_info_msg.num = "victim";
+                        world_info_msg.pose.position.x = tf_msg.transform.translation.x;
+                        world_info_msg.pose.position.y = tf_msg.transform.translation.y;
+                        world_info_msg.pose.position.z = tf_msg.transform.translation.z;
+                        world_info_msg.type = "victim";
+
+                        // Publish the WorldInfo message
+                        world_info_pub_->publish(world_info_msg);
+                    };
+                    auto future_result = median_xyz_client_->async_send_request(request, response_received_callback);
                 }
             }
             catch (cv_bridge::Exception &e)
@@ -324,7 +394,10 @@ namespace world_info
        	// const image_transport::CameraSubscriber sub_cam;
         const image_transport::Subscriber sub_cam;
         const image_transport::Publisher pub_babyface;
+
         rclcpp::Publisher<world_info_msgs::msg::WorldInfo>::SharedPtr world_info_pub_;
+        std::unique_ptr<tf2_ros::TransformBroadcaster> tfb_;
+        rclcpp::Client<GetMedianDepthXYZ>::SharedPtr median_xyz_client_;
 
         ov::Core core;
         std::shared_ptr<ov::Model>model;

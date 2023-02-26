@@ -101,10 +101,20 @@ class GeotiffSaver
       geotiff_writer.drawCoords();
       geotiff_writer.drawPath(startVec, pointVec, 120, 0, 140);
 
-      for (int i = 0; i < wi_array.array.size(); i++) {
-        geotiff_writer.drawObjectOfInterest(Eigen::Vector2f(
-          wi_array.array[i].pose.position.x, wi_array.array[i].pose.position.y),
-          wi_array.array[i].num, Eigen::Vector3f(240,10,10), "CIRCLE");
+      int k = 0;
+      for (auto wi: wi_array.array) {
+        if (wi.type == "victim") {
+          geotiff_writer.drawObjectOfInterest(Eigen::Vector2f(
+            wi.pose.position.x, wi.pose.position.y),
+            std::to_string(wi_array.id_array[k]), Eigen::Vector3f(240,10,10), "CIRCLE");
+        }
+        else if (wi.type == "hazmat")
+        {
+          geotiff_writer.drawObjectOfInterest(Eigen::Vector2f(
+            wi.pose.position.x, wi.pose.position.y),
+            std::to_string(wi_array.id_array[k]), Eigen::Vector3f(255,100,30), "DIAMOND");
+        }
+        k++;
       }
 
       geotiff_writer.writeGeotiffImage(true);
@@ -122,9 +132,8 @@ class GeotiffSaver
 
       myfile.open(map_name_ + "_pois_ " + time_str + ".csv");
       myfile << "\"pois\"" << "\n" << "\"1.2\"" << "\n" << "\"FH Aachen\"" << "\n" << "\"Germany\"" << "\n";
-      
-      myfile << "\"" << std::put_time(&tm, "%Y-%m-%d") << "\"" << "\n";
-      myfile << "\"" << std::put_time(&tm, "%H:%M:%S") << "\"" << "\n";
+
+      myfile << wi_array.start_time;
 
       myfile << "\"Mission1\"" << "\n\n";
       myfile << "id,time,text,x,y,z,robot,mode,type";

@@ -35,6 +35,8 @@ struct PoseCount
 };
 
 std::unordered_map<std::string, PoseCount> apriltag_dict;
+std::unordered_map<std::string, PoseCount> hazmat_dict;
+std::unordered_map<std::string, PoseCount> victim_dict;
 
 void transform_pose(const rclcpp::Node::SharedPtr tp_node, world_info_msgs::msg::WorldInfo& in, std::string target_frame) {
   auto source_to_target = tf_->lookupTransform(in.header.frame_id, target_frame, in.header.stamp, rclcpp::Duration::from_seconds(0.5));
@@ -86,6 +88,14 @@ void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
 {
   info = *msg;
 
+  auto t = std::time(nullptr);
+  auto tm = *std::localtime(&t);
+
+  std::ostringstream oss;
+  oss << std::put_time(&tm, "%H:%M:%S");
+  std::string time_str = oss.str();
+
+  // APRILTAGS
   // Save whatever info we have in apriltag_dict(unordered_map) wrt map
   if (info.type == "apriltag") {
 
@@ -111,20 +121,77 @@ void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
       return;
     }
     
-    auto t = std::time(nullptr);
-    auto tm = *std::localtime(&t);
-
-    std::ostringstream oss;
-    oss << std::put_time(&tm, "%H:%M:%S");
-    std::string time_str = oss.str();
-
     if (apriltag_dict.find(info.num) == apriltag_dict.end())
       apriltag_dict[info.num] = PoseCount{info, 1, id_count++, time_str, std::string("Spot"), std::string("T")}; // First time
     else
       add_to_mean(apriltag_dict[info.num].info.pose, info.pose, apriltag_dict[info.num].count);
   }
 
-  // get rviz2 markers and tag_locations from apriltag_dict
+  // HAZMAT (FOR UNIQUE HAZMAT SYMBOLS)
+  // Save whatever info we have in hazmat_dict(unordered_map) wrt map
+  if (info.type == "hazmat") {
+
+    if (hazmat_dict.find(info.num) != hazmat_dict.end())
+      if (hazmat_dict[info.num].count >= 1000)
+        return;
+
+    info.header.frame_id = "kinect"; // no frame_id named kinect_color ::face_palm
+
+    try {
+      transform_pose(node, info, "map");
+    }
+    catch (tf2::ConnectivityException& e) {
+      RCLCPP_WARN(node->get_logger(), e.what());
+      return;
+    }
+    catch (tf2::ExtrapolationException& e) {
+      RCLCPP_WARN(node->get_logger(), e.what());
+      return;
+    }
+    catch (tf2::LookupException& e) {
+      RCLCPP_WARN(node->get_logger(), e.what());
+      return;
+    }
+
+    if (hazmat_dict.find(info.num) == hazmat_dict.end())
+      hazmat_dict[info.num] = PoseCount{info, 1, id_count++, time_str, std::string("Spot"), std::string("T")}; // First time
+    else
+      add_to_mean(hazmat_dict[info.num].info.pose, info.pose, hazmat_dict[info.num].count);
+  }
+
+  // VICTIM (ONLY FOR SINGLE VICTIM)
+  // Save whatever info we have in victim_dict(unordered_map) wrt map
+  if (info.type == "victim") {
+
+    if (victim_dict.find(info.num) != victim_dict.end())
+      if (victim_dict[info.num].count >= 1000)
+        return;
+
+    info.header.frame_id = "kinect"; // no frame_id named kinect_color ::face_palm
+
+    try {
+      transform_pose(node, info, "map");
+    }
+    catch (tf2::ConnectivityException& e) {
+      RCLCPP_WARN(node->get_logger(), e.what());
+      return;
+    }
+    catch (tf2::ExtrapolationException& e) {
+      RCLCPP_WARN(node->get_logger(), e.what());
+      return;
+    }
+    catch (tf2::LookupException& e) {
+      RCLCPP_WARN(node->get_logger(), e.what());
+      return;
+    }
+    
+    if (victim_dict.find(info.num) == victim_dict.end())
+      victim_dict[info.num] = PoseCount{info, 1, id_count++, time_str, std::string("Spot"), std::string("T")}; // First time
+    else
+      add_to_mean(victim_dict[info.num].info.pose, info.pose, victim_dict[info.num].count);
+  }
+
+  // get rviz2 markers and tag_locations from various dicts
   marker_array = empty_marker_array;
   wi_vector = empty_wi_vector;
 
@@ -134,6 +201,56 @@ void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
     marker.header = it->second.info.header;
     marker.header.frame_id = "map";
     marker.ns = "apriltag";
+    marker.id = marker_array.markers.size()+1;
+    marker.type = shape;
+    marker.action = visualization_msgs::msg::Marker::ADD;
+    marker.pose = it->second.info.pose;
+    marker.scale.x = 0.2;
+    marker.scale.y = 0.2;
+    marker.scale.z = 0.2;
+    marker.color.r = 0.0f;
+    marker.color.g = 1.0f;
+    marker.color.b = 0.0f;
+    marker.color.a = 1.0f;
+    marker_array.markers.push_back(marker);
+
+    wi_vector.array.push_back(it->second.info);
+    wi_vector.id_array.push_back(it->second.id);
+    wi_vector.time_array.push_back(it->second.time);
+    wi_vector.robot_array.push_back(it->second.robot);
+    wi_vector.mode_array.push_back(it->second.mode);
+  }
+  for (auto it = hazmat_dict.begin(); it != hazmat_dict.end(); ++it) {
+    uint32_t shape = visualization_msgs::msg::Marker::CUBE;
+    visualization_msgs::msg::Marker marker;
+    marker.header = it->second.info.header;
+    marker.header.frame_id = "map";
+    marker.ns = "hazmat";
+    marker.id = marker_array.markers.size()+1;
+    marker.type = shape;
+    marker.action = visualization_msgs::msg::Marker::ADD;
+    marker.pose = it->second.info.pose;
+    marker.scale.x = 0.2;
+    marker.scale.y = 0.2;
+    marker.scale.z = 0.2;
+    marker.color.r = 0.0f;
+    marker.color.g = 1.0f;
+    marker.color.b = 0.0f;
+    marker.color.a = 1.0f;
+    marker_array.markers.push_back(marker);
+
+    wi_vector.array.push_back(it->second.info);
+    wi_vector.id_array.push_back(it->second.id);
+    wi_vector.time_array.push_back(it->second.time);
+    wi_vector.robot_array.push_back(it->second.robot);
+    wi_vector.mode_array.push_back(it->second.mode);
+  }
+  for (auto it = victim_dict.begin(); it != victim_dict.end(); ++it) {
+    uint32_t shape = visualization_msgs::msg::Marker::CUBE;
+    visualization_msgs::msg::Marker marker;
+    marker.header = it->second.info.header;
+    marker.header.frame_id = "map";
+    marker.ns = "victim";
     marker.id = marker_array.markers.size()+1;
     marker.type = shape;
     marker.action = visualization_msgs::msg::Marker::ADD;
@@ -169,6 +286,12 @@ int main(int argc, char **argv) {
   rclcpp::init(argc, argv);
 
   node = rclcpp::Node::make_shared("world_info_server");
+
+  auto t = std::time(nullptr);
+  auto tm = *std::localtime(&t);
+  std::ostringstream csv_start_time;
+  csv_start_time << "\"" << std::put_time(&tm, "%Y-%m-%d") << "\"" << "\n" << "\"" << std::put_time(&tm, "%H:%M:%S") << "\"" << "\n";
+  empty_wi_vector.start_time = csv_start_time.str();
 
   auto sub = node->create_subscription<world_info_msgs::msg::WorldInfo>("world_info_sub", 1, &receive_info);
   wi_pub = node->create_publisher<world_info_msgs::msg::WorldInfoArray>("world_info_array", 1);

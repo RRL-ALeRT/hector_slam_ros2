@@ -1,11 +1,6 @@
 cmake_minimum_required(VERSION 3.8)
 project(world_info)
 
-# Default to C99
-if(NOT CMAKE_C_STANDARD)
-  set(CMAKE_C_STANDARD 99)
-endif()
-
 # Default to C++14
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
@@ -45,8 +40,14 @@ rclcpp_components_register_node(aruco
 PLUGIN "world_info::DetectAruco"
 EXECUTABLE aruco_node)
 
+add_library(rs_depth SHARED src/rs_depth.cpp)
+ament_target_dependencies(rs_depth rclcpp rclcpp_components sensor_msgs image_transport OpenCV cv_bridge world_info_msgs)
+rclcpp_components_register_node(rs_depth
+PLUGIN "world_info::RSDepth"
+EXECUTABLE rs_depth_node)
+
 add_library(hazmat SHARED src/hazmat.cpp)
-ament_target_dependencies(hazmat rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport OpenCV cv_bridge)
+ament_target_dependencies(hazmat rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport OpenCV cv_bridge tf2_ros)
 target_link_libraries(hazmat $ENV{INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so)
 target_include_directories(hazmat PUBLIC $ENV{INTEL_OPENVINO_DIR}/runtime/include $ENV{INTEL_OPENVINO_DIR}/runtime/include/ie)
 rclcpp_components_register_node(hazmat
@@ -62,7 +63,7 @@ PLUGIN "world_info::DetectHazmatSeg"
 EXECUTABLE hazmat_seg_node)
 
 add_library(babyface SHARED src/babyface.cpp)
-ament_target_dependencies(babyface rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport OpenCV cv_bridge)
+ament_target_dependencies(babyface rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport OpenCV cv_bridge tf2_ros)
 target_link_libraries(babyface $ENV{INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so)
 target_include_directories(babyface PUBLIC $ENV{INTEL_OPENVINO_DIR}/runtime/include $ENV{INTEL_OPENVINO_DIR}/runtime/include/ie)
 rclcpp_components_register_node(babyface
@@ -99,6 +100,7 @@ install(TARGETS
   hazmat
   hazmat_seg
   door_seg
+  rs_depth
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin

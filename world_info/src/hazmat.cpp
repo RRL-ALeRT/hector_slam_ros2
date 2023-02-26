@@ -7,6 +7,9 @@
 #include <image_transport/image_transport.hpp>
 #include <cv_bridge/cv_bridge.h>
 #include <world_info_msgs/msg/world_info.hpp>
+#include <world_info_msgs/srv/get_median_depth_xyz.hpp>
+
+#include "tf2_ros/transform_broadcaster.h"
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
 
@@ -24,6 +27,9 @@ descr(const std::string &description, const bool &read_only = false)
 
 namespace world_info
 {
+using GetMedianDepthXYZ = world_info_msgs::srv::GetMedianDepthXYZ;
+using ServiceResponseFuture = rclcpp::Client<GetMedianDepthXYZ>::SharedFuture;
+
     struct Detection
     {
         int class_id;
@@ -67,6 +73,9 @@ namespace world_info
             declare_parameter("image_transport", "raw", descr( {}, true)), rmw_qos_profile_sensor_data)),
         pub_hazmat(image_transport::create_publisher(this, "hazmat_detected"))
         {
+            // Initialize TransformBroadcaster
+            tfb_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
+
            	// Create WorldInfo publisher
             world_info_pub_ = create_publisher<world_info_msgs::msg::WorldInfo>("/world_info_sub", 1);
 
@@ -83,8 +92,19 @@ namespace world_info
                 declare_parameter("inference_mode", inference_mode);
             get_parameter("inference_mode", inference_mode);
 
+            class_names = {"poison", "oxygen", "flammable", "flammable-solid", "corrosive", "dangerous", "non-flammable-gas", "organic-peroxide", "explosive", "radioactive", "inhalation-hazard", "spontaneously-combustible", "infectious-substance"};
+
             std::string package_share_directory = ament_index_cpp::get_package_share_directory("world_info");
             model = core.read_model(package_share_directory + "/weights/hazmat.onnx");
+
+            median_xyz_client_ = create_client<GetMedianDepthXYZ>("get_median_depth_xyz");
+            while (!median_xyz_client_->wait_for_service(std::chrono::seconds(1))) {
+                if (!rclcpp::ok()) {
+                    RCLCPP_ERROR(get_logger(), "Interrupted while waiting for the service. Exiting.");
+                    return;
+                }
+                RCLCPP_INFO(get_logger(), "service from rs_depth not available, waiting again...");
+            }
         }
 
         ~DetectHazmat()
@@ -211,15 +231,57 @@ namespace world_info
                     box.height = ry *box.height;
                     RCLCPP_INFO_STREAM(get_logger(), "" << "Bbox" << i + 1 << ": Class: " << classId << " " <<
                         "Confidence: " << confidence << " Scaled coords:[ " <<
-                        "cx: " << (float)(box.x + (box.width / 2)) / img.cols << ", " <<
-                        "cy: " << (float)(box.y + (box.height / 2)) / img.rows << ", " <<
-                        "w: " << (float) box.width / img.cols << ", " <<
-                        "h: " << (float) box.height / img.rows << " ]");
-                    float xmax = box.x + box.width;
-                    float ymax = box.y + box.height;
+                        "cx: " << (float)(box.x + (box.width / 2)) << ", " <<
+                        "cy: " << (float)(box.y + (box.height / 2)) << ", " <<
+                        "w: " << (float) box.width << ", " <<
+                        "h: " << (float) box.height << " ]");
+                    float xmax = std::min(img.size().width - 1, box.x + box.width);
+                    float ymax = std::min(img.size().height - 1, box.y + box.height);
+
+                    auto request = std::make_shared<GetMedianDepthXYZ::Request>();
+                    request->header = msg_img->header;
+                    request->x = {box.x, xmax};
+                    request->y = {box.y, ymax};
+
                     cv::rectangle(img, cv::Point(box.x, box.y), cv::Point(xmax, ymax), cv::Scalar(0, 255, 0), 3);
-                    cv::rectangle(img, cv::Point(box.x, box.y - 20), cv::Point(xmax, box.y), cv::Scalar(0, 255, 0), cv::FILLED);
-                    cv::putText(img, std::to_string(classId), cv::Point(box.x, box.y - 5), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
+                    cv::putText(img, class_names[classId], cv::Point(box.x, box.y - 5), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
+
+                    auto response_received_callback = [this,msg_img,classId](ServiceResponseFuture future) {
+                        auto result = future.get();
+                        if (std::isnan(result.get()->x) || std::isnan(result.get()->y) || std::isnan(result.get()->z))
+                            return;
+                        if (std::isinf(result.get()->x) || std::isinf(result.get()->y) || std::isinf(result.get()->z))
+                            return;
+                        if (result.get()->x == 0 & result.get()->y == 0 & result.get()->z == 0)
+                            return;
+
+                        geometry_msgs::msg::TransformStamped tf_msg;
+                        tf_msg.header.stamp = msg_img->header.stamp;
+                        tf_msg.header.frame_id = "kinect";
+
+                        // Set the transform message fields
+                        tf_msg.child_frame_id = class_names[classId];
+                        tf_msg.transform.translation.x = result.get()->z;
+                        tf_msg.transform.translation.y = -result.get()->x;
+                        tf_msg.transform.translation.z = -result.get()->y;
+
+                        // Publish the transform message
+                        tfb_->sendTransform(tf_msg);
+
+                        // Publish the QR code poses
+                        world_info_msgs::msg::WorldInfo world_info_msg;
+
+                        world_info_msg.header.stamp = msg_img->header.stamp;
+                        world_info_msg.num = class_names[classId];
+                        world_info_msg.pose.position.x = tf_msg.transform.translation.x;
+                        world_info_msg.pose.position.y = tf_msg.transform.translation.y;
+                        world_info_msg.pose.position.z = tf_msg.transform.translation.z;
+                        world_info_msg.type = "hazmat";
+
+                        // Publish the WorldInfo message
+                        world_info_pub_->publish(world_info_msg);
+                    };
+                    auto future_result = median_xyz_client_->async_send_request(request, response_received_callback);
                 }
             }
             catch (cv::Exception &e) {
@@ -228,7 +290,7 @@ namespace world_info
             }
 
            	// Display the frame
-            sensor_msgs::msg::Image::SharedPtr img_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", img)
+            sensor_msgs::msg::Image::SharedPtr img_msg = cv_bridge::CvImage(msg_img->header, "bgr8", img)
                 .toImageMsg();
             pub_hazmat.publish(*img_msg.get());
         }
@@ -236,7 +298,10 @@ namespace world_info
        	// const image_transport::CameraSubscriber sub_cam;
         const image_transport::Subscriber sub_cam;
         const image_transport::Publisher pub_hazmat;
+
+        std::unique_ptr<tf2_ros::TransformBroadcaster> tfb_;
         rclcpp::Publisher<world_info_msgs::msg::WorldInfo>::SharedPtr world_info_pub_;
+        rclcpp::Client<GetMedianDepthXYZ>::SharedPtr median_xyz_client_;
 
         ov::Core core;
         std::shared_ptr<ov::Model>model;
@@ -247,6 +312,7 @@ namespace world_info
         float SCORE_THRESHOLD;
         float NMS_THRESHOLD;
         float CONFIDENCE_THRESHOLD;
+        std::vector<std::string> class_names;
 
         bool first_run = true;
     };
