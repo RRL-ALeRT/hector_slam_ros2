@@ -205,7 +205,7 @@ public:
       for (int i = 0; i < wi_array.array.size(); i++) {
         geotiff_writer_.drawObjectOfInterest(Eigen::Vector2f(
           wi_array.array[i].pose.position.x, wi_array.array[i].pose.position.y),
-          wi_array.array[i].num, Eigen::Vector3f(240,10,10), "CIRCLE");
+          wi_array.array[i].num, Eigen::Vector3f(240,10,10), "CIRCLE", 0);
       }
 
       geotiff_writer_.drawCoords();

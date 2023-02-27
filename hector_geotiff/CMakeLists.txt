@@ -19,8 +19,9 @@ find_package(visualization_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(ament_index_cpp)
-find_package(world_info_msgs)
+find_package(ament_index_cpp REQUIRED)
+find_package(world_info_msgs REQUIRED)
+find_package(tf2 REQUIRED)
 
 find_package(Qt5 COMPONENTS Widgets REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -41,7 +42,7 @@ ament_target_dependencies(geotiff_writer rclcpp nav_msgs hector_map_tools ament_
 
 add_executable(geotiff_saver src/geotiff_saver.cpp)
 target_link_libraries(geotiff_saver geotiff_writer)
-ament_target_dependencies(geotiff_saver rclcpp nav_msgs visualization_msgs world_info_msgs)
+ament_target_dependencies(geotiff_saver rclcpp nav_msgs visualization_msgs world_info_msgs tf2)
 
 add_executable(geotiff_node src/geotiff_node.cpp)
 target_link_libraries(geotiff_node geotiff_writer)

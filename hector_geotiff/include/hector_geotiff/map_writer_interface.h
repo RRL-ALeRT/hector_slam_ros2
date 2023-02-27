@@ -49,7 +49,7 @@ public:
   bool completed_map_ = false;
 
   virtual std::string getBasePathAndFileName() const = 0;
-  virtual void drawObjectOfInterest(const Eigen::Vector2f& coords, const std::string& txt, const Eigen::Vector3f& color, const std::string& shape = "CIRCLE") = 0;
+  virtual void drawObjectOfInterest(const Eigen::Vector2f& coords, const std::string& txt, const Eigen::Vector3f& color, const std::string& shape = "CIRCLE", const double& startAngle = 0) = 0;
   //virtual void drawPath(const Eigen::Vector3f& start, const std::vector<Eigen::Vector2f>& points) = 0;
 
   inline virtual void drawPath(const Eigen::Vector3f& start, const std::vector<Eigen::Vector2f>& points){

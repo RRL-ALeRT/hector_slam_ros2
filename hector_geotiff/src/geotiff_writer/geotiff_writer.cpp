@@ -417,7 +417,7 @@ void GeotiffWriter::drawMap( const nav_msgs::msg::OccupancyGrid &map, bool draw_
 }
 
 void GeotiffWriter::drawObjectOfInterest( const Eigen::Vector2f &coords, const std::string &txt, const Eigen::Vector3f &color,
-                                          const std::string &shape )
+                                          const std::string &shape, const double &startAngle)
 {
   QPainter qPainter( &image );
 
@@ -441,19 +441,36 @@ void GeotiffWriter::drawObjectOfInterest( const Eigen::Vector2f &coords, const s
   QRectF shape_rect( -radius, -radius, radius * 2.0f, radius * 2.0f );
   qPainter.save();
 
-  QBrush tmpBrush( QColor( color[0], color[1], color[2] ));
-  QPen tmpPen( Qt::NoPen );
-  qPainter.setBrush( tmpBrush );
-  qPainter.setPen( tmpPen );
-
   if ( shape == "CIRCLE" )
   {
+    QBrush tmpBrush( QColor( color[0], color[1], color[2] ));
+    QPen tmpPen( Qt::NoPen );
+    qPainter.setBrush( tmpBrush );
+    qPainter.setPen( tmpPen );
+
     qPainter.drawEllipse( shape_rect );
   }
   else if ( shape == "DIAMOND" )
-  {
+  {    
+    QBrush tmpBrush( QColor( color[0], color[1], color[2] ));
+    QPen tmpPen( Qt::NoPen );
+    qPainter.setBrush( tmpBrush );
+    qPainter.setPen( tmpPen );
+
     qPainter.rotate( 45 );
     qPainter.drawRect( shape_rect );
+  }
+  else if ( shape == "HALF_CIRCLE" )
+  {    
+    QRectF shape_rect2( -radius * 1.5f, -radius * 1.5f, radius * 3.0f, radius * 3.0f );
+    
+    QBrush tmpBrush( Qt::NoBrush );
+    QPen tmpPen( QColor( color[0], color[1], color[2] ) );
+    qPainter.setBrush( tmpBrush );
+    qPainter.setPen( tmpPen );
+    
+    int spanAngle = startAngle + 360; // span angle in degrees (clockwise from start angle)
+    qPainter.drawArc( shape_rect2, startAngle * 16, spanAngle * 16 ); // 16 is to convert to qt 16 bit
   }
 
   qPainter.restore();

@@ -37,6 +37,7 @@ struct PoseCount
 std::unordered_map<std::string, PoseCount> apriltag_dict;
 std::unordered_map<std::string, PoseCount> hazmat_dict;
 std::unordered_map<std::string, PoseCount> victim_dict;
+std::unordered_map<std::string, PoseCount> qr_dict;
 
 void transform_pose(const rclcpp::Node::SharedPtr tp_node, world_info_msgs::msg::WorldInfo& in, std::string target_frame) {
   auto source_to_target = tf_->lookupTransform(in.header.frame_id, target_frame, in.header.stamp, rclcpp::Duration::from_seconds(0.5));
@@ -127,6 +128,38 @@ void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
       add_to_mean(apriltag_dict[info.num].info.pose, info.pose, apriltag_dict[info.num].count);
   }
 
+  // QR
+  // Save whatever info we have in qr_dict(unordered_map) wrt map
+  if (info.type == "qr") {
+
+    if (qr_dict.find(info.num) != qr_dict.end())
+      if (qr_dict[info.num].count >= 1000)
+        return;
+
+    info.header.frame_id = "kinect"; // no frame_id named kinect_color ::face_palm
+
+    try {
+      transform_pose(node, info, "map");
+    }
+    catch (tf2::ConnectivityException& e) {
+      RCLCPP_WARN(node->get_logger(), e.what());
+      return;
+    }
+    catch (tf2::ExtrapolationException& e) {
+      RCLCPP_WARN(node->get_logger(), e.what());
+      return;
+    }
+    catch (tf2::LookupException& e) {
+      RCLCPP_WARN(node->get_logger(), e.what());
+      return;
+    }
+    
+    if (qr_dict.find(info.num) == qr_dict.end())
+      qr_dict[info.num] = PoseCount{info, 1, id_count++, time_str, std::string("Spot"), std::string("T")}; // First time
+    else
+      add_to_mean(qr_dict[info.num].info.pose, info.pose, qr_dict[info.num].count);
+  }
+
   // HAZMAT (FOR UNIQUE HAZMAT SYMBOLS)
   // Save whatever info we have in hazmat_dict(unordered_map) wrt map
   if (info.type == "hazmat") {
@@ -201,6 +234,31 @@ void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
     marker.header = it->second.info.header;
     marker.header.frame_id = "map";
     marker.ns = "apriltag";
+    marker.id = marker_array.markers.size()+1;
+    marker.type = shape;
+    marker.action = visualization_msgs::msg::Marker::ADD;
+    marker.pose = it->second.info.pose;
+    marker.scale.x = 0.2;
+    marker.scale.y = 0.2;
+    marker.scale.z = 0.2;
+    marker.color.r = 0.0f;
+    marker.color.g = 1.0f;
+    marker.color.b = 0.0f;
+    marker.color.a = 1.0f;
+    marker_array.markers.push_back(marker);
+
+    wi_vector.array.push_back(it->second.info);
+    wi_vector.id_array.push_back(it->second.id);
+    wi_vector.time_array.push_back(it->second.time);
+    wi_vector.robot_array.push_back(it->second.robot);
+    wi_vector.mode_array.push_back(it->second.mode);
+  }
+  for (auto it = qr_dict.begin(); it != qr_dict.end(); ++it) {
+    uint32_t shape = visualization_msgs::msg::Marker::CUBE;
+    visualization_msgs::msg::Marker marker;
+    marker.header = it->second.info.header;
+    marker.header.frame_id = "map";
+    marker.ns = "qr";
     marker.id = marker_array.markers.size()+1;
     marker.type = shape;
     marker.action = visualization_msgs::msg::Marker::ADD;

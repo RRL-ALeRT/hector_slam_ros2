@@ -35,6 +35,7 @@
 #include <nav_msgs/srv/get_map.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 #include "world_info_msgs/msg/world_info_array.hpp"
+#include <tf2/utils.h>
 
 #include <QApplication>
 
@@ -42,7 +43,7 @@
 class GeotiffSaver
 {
   public:
-    GeotiffSaver(rclcpp::Node::SharedPtr node, std::string map_name) : node_(node), map_name_(map_name) {
+    GeotiffSaver(rclcpp::Node::SharedPtr node, std::string mission_name) : node_(node), mission_name_(mission_name) {
       world_info_sub_ = node_->create_subscription<world_info_msgs::msg::WorldInfoArray>("world_info_array", 1, std::bind(&GeotiffSaver::worldInfoCallback, this, std::placeholders::_1));
       
       path_sub_ = node_->create_subscription<visualization_msgs::msg::MarkerArray>(
@@ -64,7 +65,7 @@ class GeotiffSaver
         
           pointVec.push_back(Eigen::Vector2f(marker_array[i].pose.position.x, marker_array[i].pose.position.y));
 
-          RCLCPP_INFO(node_->get_logger(), "Path loaded.");
+          RCLCPP_INFO_ONCE(node_->get_logger(), "Path loaded.");
         }
       }
       path_loaded = true;
@@ -87,12 +88,13 @@ class GeotiffSaver
     }
 
     void saveMap () {
-      RCLCPP_INFO(node_->get_logger(), "Map loaded.");
+      RCLCPP_INFO_ONCE(node_->get_logger(), "Map loaded.");
       hector_geotiff::GeotiffWriter geotiff_writer(false);
 
       startVec[0] = pointVec[0][0];
       startVec[1] = pointVec[0][1];
 
+      map_name_ = "RoboCup2023-ALeRT-" + mission_name_;
       geotiff_writer.setMapFileName(map_name_);
       geotiff_writer.setupTransforms(map);
       geotiff_writer.setupImageSize();
@@ -103,16 +105,44 @@ class GeotiffSaver
 
       int k = 0;
       for (auto wi: wi_array.array) {
-        if (wi.type == "victim") {
-          geotiff_writer.drawObjectOfInterest(Eigen::Vector2f(
-            wi.pose.position.x, wi.pose.position.y),
-            std::to_string(wi_array.id_array[k]), Eigen::Vector3f(240,10,10), "CIRCLE");
-        }
-        else if (wi.type == "hazmat")
+        if (wi.type == "hazmat")
         {
           geotiff_writer.drawObjectOfInterest(Eigen::Vector2f(
             wi.pose.position.x, wi.pose.position.y),
-            std::to_string(wi_array.id_array[k]), Eigen::Vector3f(255,100,30), "DIAMOND");
+            std::to_string(wi_array.id_array[k]), Eigen::Vector3f(255,100,30), "DIAMOND", 0);
+        }
+        k++;
+      }
+
+      k = 0;
+      for (auto wi: wi_array.array) {
+        if (wi.type == "qr") {
+
+          tf2::Quaternion q_tf(wi.pose.orientation.x,wi.pose.orientation.y,wi.pose.orientation.z,wi.pose.orientation.w);
+          q_tf.inverse(); // tag to map quaternion
+          tf2::Matrix3x3 m(q_tf); // Convert quaternion to matrix
+          double roll, pitch, yaw;
+          m.getRPY(roll, pitch, yaw); // Get Euler angles
+
+          roll *= 180/M_PI;
+          pitch *= 180/M_PI;
+          yaw *= 180/M_PI;
+
+          RCLCPP_INFO_STREAM(node_->get_logger(), roll << " " << pitch << " " << yaw);
+
+          geotiff_writer.drawObjectOfInterest(Eigen::Vector2f(
+            wi.pose.position.x, wi.pose.position.y),
+            std::to_string(wi_array.id_array[k]), Eigen::Vector3f(181,101,29), "HALF_CIRCLE", 0);
+        }
+        k++;
+      }
+
+      k = 0;
+      for (auto wi: wi_array.array) {
+        if (wi.type == "victim") {
+          geotiff_writer.drawObjectOfInterest(Eigen::Vector2f(
+            wi.pose.position.x, wi.pose.position.y),
+            std::to_string(wi_array.id_array[k]), Eigen::Vector3f(240,10,10), "CIRCLE", 0);
         }
         k++;
       }
@@ -131,11 +161,11 @@ class GeotiffSaver
       std::string time_str = oss.str();
 
       myfile.open(map_name_ + "_pois_ " + time_str + ".csv");
-      myfile << "\"pois\"" << "\n" << "\"1.2\"" << "\n" << "\"FH Aachen\"" << "\n" << "\"Germany\"" << "\n";
+      myfile << "\"pois\"" << "\n" << "\"1.2\"" << "\n" << "\"ALeRT\"" << "\n" << "\"Germany\"" << "\n";
 
       myfile << wi_array.start_time;
 
-      myfile << "\"Mission1\"" << "\n\n";
+      myfile << "\"" + mission_name_ + "\"" << "\n\n";
       myfile << "id,time,text,x,y,z,robot,mode,type";
 
       std::vector<std::string> final_world_data;
@@ -172,6 +202,7 @@ class GeotiffSaver
 
     world_info_msgs::msg::WorldInfoArray wi_array;
     std::string map_name_ = "";
+    std::string mission_name_ = "";
     bool map_loaded = false;
     bool path_loaded = false;
 };
@@ -181,9 +212,19 @@ int main(int argc, char** argv)
   rclcpp::init(argc, argv);
   rclcpp::Node::SharedPtr node = std::make_shared<rclcpp::Node>("geotiff_saver");
 
-  std::string map_name = "RoboCup2023-FHAachen-Mission1";
+  // Retrieve the (non-option) argument:
+    std::string mission_name = "";
+  if ( (argc <= 1) || (argv[argc-1] == NULL) ) // there is NO input...
+  {
+    std::cerr << "ros2 run hector_geotiff geotiff_saver <Mission_name>" << std::endl;
+    return -1;
+  }
+  else
+  {
+    mission_name = argv[argc-1];
+  }
 
-  GeotiffSaver gs(node, map_name);
+  GeotiffSaver gs(node, mission_name);
   rclcpp::spin(node);
   rclcpp::shutdown();
   return 0;
