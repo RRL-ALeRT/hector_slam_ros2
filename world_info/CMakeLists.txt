@@ -48,40 +48,30 @@ EXECUTABLE rs_depth_node)
 
 add_library(hazmat SHARED src/hazmat.cpp)
 ament_target_dependencies(hazmat rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport OpenCV cv_bridge tf2_ros)
-target_link_libraries(hazmat $ENV{INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so)
-target_include_directories(hazmat PUBLIC $ENV{INTEL_OPENVINO_DIR}/runtime/include $ENV{INTEL_OPENVINO_DIR}/runtime/include/ie)
 rclcpp_components_register_node(hazmat
 PLUGIN "world_info::DetectHazmat"
 EXECUTABLE hazmat_node)
 
 add_library(hazmat_seg SHARED src/hazmat_seg.cpp)
 ament_target_dependencies(hazmat_seg rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport OpenCV cv_bridge)
-target_link_libraries(hazmat_seg $ENV{INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so)
-target_include_directories(hazmat_seg PUBLIC $ENV{INTEL_OPENVINO_DIR}/runtime/include $ENV{INTEL_OPENVINO_DIR}/runtime/include/ie)
 rclcpp_components_register_node(hazmat_seg
 PLUGIN "world_info::DetectHazmatSeg"
 EXECUTABLE hazmat_seg_node)
 
 add_library(babyface SHARED src/babyface.cpp)
 ament_target_dependencies(babyface rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport OpenCV cv_bridge tf2_ros)
-target_link_libraries(babyface $ENV{INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so)
-target_include_directories(babyface PUBLIC $ENV{INTEL_OPENVINO_DIR}/runtime/include $ENV{INTEL_OPENVINO_DIR}/runtime/include/ie)
 rclcpp_components_register_node(babyface
 PLUGIN "world_info::DetectBabyface"
 EXECUTABLE babyface_node)
 
 add_library(firenet SHARED src/firenet.cpp)
 ament_target_dependencies(firenet rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport OpenCV cv_bridge)
-target_link_libraries(firenet $ENV{INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so)
-target_include_directories(firenet PUBLIC $ENV{INTEL_OPENVINO_DIR}/runtime/include $ENV{INTEL_OPENVINO_DIR}/runtime/include/ie)
 rclcpp_components_register_node(firenet
 PLUGIN "world_info::DetectFirenet"
 EXECUTABLE firenet_node)
 
 add_library(door_seg SHARED src/door_seg.cpp)
 ament_target_dependencies(door_seg rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport OpenCV cv_bridge)
-target_link_libraries(door_seg $ENV{INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so)
-target_include_directories(door_seg PUBLIC $ENV{INTEL_OPENVINO_DIR}/runtime/include $ENV{INTEL_OPENVINO_DIR}/runtime/include/ie)
 rclcpp_components_register_node(door_seg
 PLUGIN "world_info::DetectDoorSeg"
 EXECUTABLE door_seg_node)
