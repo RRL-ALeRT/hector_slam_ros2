@@ -350,6 +350,7 @@ int main(int argc, char **argv) {
   std::ostringstream csv_start_time;
   csv_start_time << "\"" << std::put_time(&tm, "%Y-%m-%d") << "\"" << "\n" << "\"" << std::put_time(&tm, "%H:%M:%S") << "\"" << "\n";
   empty_wi_vector.start_time = csv_start_time.str();
+  wi_vector = empty_wi_vector;
 
   auto sub = node->create_subscription<world_info_msgs::msg::WorldInfo>("world_info_sub", 1, &receive_info);
   wi_pub = node->create_publisher<world_info_msgs::msg::WorldInfoArray>("world_info_array", 1);
