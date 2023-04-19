@@ -35,9 +35,10 @@ struct PoseCount
 };
 
 std::unordered_map<std::string, PoseCount> apriltag_dict;
-std::unordered_map<std::string, PoseCount> hazmat_dict;
 std::unordered_map<std::string, PoseCount> victim_dict;
 std::unordered_map<std::string, PoseCount> qr_dict;
+
+std::unordered_map<std::string, std::vector<PoseCount>> multiple_hazmat;
 
 void transform_pose(const rclcpp::Node::SharedPtr tp_node, world_info_msgs::msg::WorldInfo& in, std::string target_frame) {
   auto source_to_target = tf_->lookupTransform(in.header.frame_id, target_frame, in.header.stamp, rclcpp::Duration::from_seconds(0.5));
@@ -85,9 +86,17 @@ void add_to_mean(geometry_msgs::msg::Pose& mean, const geometry_msgs::msg::Pose 
   numPoses++;
 }
 
+bool within_one_meter_range(const geometry_msgs::msg::Pose mean, const geometry_msgs::msg::Pose newPose) {
+  if (std::abs(mean.position.x - newPose.position.x) > 1.0) return false;
+  if (std::abs(mean.position.y - newPose.position.y) > 1.0) return false;
+  if (std::abs(mean.position.z - newPose.position.z) > 1.0) return false;
+  return true;
+}
+
 void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
 {
   info = *msg;
+  if (info.header.frame_id == "kinect_color") info.header.frame_id = "kinect"; // for webots
 
   auto t = std::time(nullptr);
   auto tm = *std::localtime(&t);
@@ -103,8 +112,6 @@ void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
     if (apriltag_dict.find(info.num) != apriltag_dict.end())
       if (apriltag_dict[info.num].count >= 1000)
         return;
-
-    info.header.frame_id = "kinect"; // no frame_id named kinect_color ::face_palm
 
     try {
       transform_pose(node, info, "map");
@@ -136,8 +143,6 @@ void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
       if (qr_dict[info.num].count >= 1000)
         return;
 
-    info.header.frame_id = "kinect"; // no frame_id named kinect_color ::face_palm
-
     try {
       transform_pose(node, info, "map");
     }
@@ -163,13 +168,7 @@ void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
   // HAZMAT (FOR UNIQUE HAZMAT SYMBOLS)
   // Save whatever info we have in hazmat_dict(unordered_map) wrt map
   if (info.type == "hazmat") {
-
-    if (hazmat_dict.find(info.num) != hazmat_dict.end())
-      if (hazmat_dict[info.num].count >= 1000)
-        return;
-
-    info.header.frame_id = "kinect"; // no frame_id named kinect_color ::face_palm
-
+    
     try {
       transform_pose(node, info, "map");
     }
@@ -186,10 +185,24 @@ void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
       return;
     }
 
-    if (hazmat_dict.find(info.num) == hazmat_dict.end())
-      hazmat_dict[info.num] = PoseCount{info, 1, id_count++, time_str, std::string("Spot"), std::string("T")}; // First time
-    else
-      add_to_mean(hazmat_dict[info.num].info.pose, info.pose, hazmat_dict[info.num].count);
+    bool hazmat_found = false;
+    if (multiple_hazmat.find(info.num) != multiple_hazmat.end()) {
+      for (auto single_hazmat: multiple_hazmat[info.num]) {
+        if (within_one_meter_range(single_hazmat.info.pose, info.pose)) {
+          if (single_hazmat.count <= 1000) {
+            add_to_mean(single_hazmat.info.pose, info.pose, single_hazmat.count);
+          }
+          hazmat_found = true;
+          break;
+        }
+      }
+    }
+    if (!hazmat_found) {
+      PoseCount single_hazmat_dict;
+      single_hazmat_dict = PoseCount{info, 1, id_count++, time_str, std::string("Spot"), std::string("T")}; // First time
+
+      multiple_hazmat[info.num].push_back(single_hazmat_dict);
+    }
   }
 
   // VICTIM (ONLY FOR SINGLE VICTIM)
@@ -199,8 +212,6 @@ void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
     if (victim_dict.find(info.num) != victim_dict.end())
       if (victim_dict[info.num].count >= 1000)
         return;
-
-    info.header.frame_id = "kinect"; // no frame_id named kinect_color ::face_palm
 
     try {
       transform_pose(node, info, "map");
@@ -278,30 +289,33 @@ void receive_info(const world_info_msgs::msg::WorldInfo::SharedPtr msg)
     wi_vector.robot_array.push_back(it->second.robot);
     wi_vector.mode_array.push_back(it->second.mode);
   }
-  for (auto it = hazmat_dict.begin(); it != hazmat_dict.end(); ++it) {
-    uint32_t shape = visualization_msgs::msg::Marker::CUBE;
-    visualization_msgs::msg::Marker marker;
-    marker.header = it->second.info.header;
-    marker.header.frame_id = "map";
-    marker.ns = "hazmat";
-    marker.id = marker_array.markers.size()+1;
-    marker.type = shape;
-    marker.action = visualization_msgs::msg::Marker::ADD;
-    marker.pose = it->second.info.pose;
-    marker.scale.x = 0.2;
-    marker.scale.y = 0.2;
-    marker.scale.z = 0.2;
-    marker.color.r = 0.0f;
-    marker.color.g = 1.0f;
-    marker.color.b = 0.0f;
-    marker.color.a = 1.0f;
-    marker_array.markers.push_back(marker);
+  for (auto single_hazmat_vector = multiple_hazmat.begin(); single_hazmat_vector != multiple_hazmat.end(); ++single_hazmat_vector) {
+    for (auto it: single_hazmat_vector->second)
+    {
+      uint32_t shape = visualization_msgs::msg::Marker::CUBE;
+      visualization_msgs::msg::Marker marker;
+      marker.header = it.info.header;
+      marker.header.frame_id = "map";
+      marker.ns = "hazmat";
+      marker.id = marker_array.markers.size()+1;
+      marker.type = shape;
+      marker.action = visualization_msgs::msg::Marker::ADD;
+      marker.pose = it.info.pose;
+      marker.scale.x = 0.2;
+      marker.scale.y = 0.2;
+      marker.scale.z = 0.2;
+      marker.color.r = 0.0f;
+      marker.color.g = 1.0f;
+      marker.color.b = 0.0f;
+      marker.color.a = 1.0f;
+      marker_array.markers.push_back(marker);
 
-    wi_vector.array.push_back(it->second.info);
-    wi_vector.id_array.push_back(it->second.id);
-    wi_vector.time_array.push_back(it->second.time);
-    wi_vector.robot_array.push_back(it->second.robot);
-    wi_vector.mode_array.push_back(it->second.mode);
+      wi_vector.array.push_back(it.info);
+      wi_vector.id_array.push_back(it.id);
+      wi_vector.time_array.push_back(it.time);
+      wi_vector.robot_array.push_back(it.robot);
+      wi_vector.mode_array.push_back(it.mode);
+    }
   }
   for (auto it = victim_dict.begin(); it != victim_dict.end(); ++it) {
     uint32_t shape = visualization_msgs::msg::Marker::CUBE;

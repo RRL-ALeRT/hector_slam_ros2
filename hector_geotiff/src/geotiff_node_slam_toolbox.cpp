@@ -133,8 +133,6 @@ public:
   {
     auto start_time = node_->get_clock()->now().seconds();
 
-    RCLCPP_INFO(node_->get_logger(), "GeotiffNode: Map service called successfully");
-
     std::string map_file_name = p_map_file_base_name_ + "_" + p_mission_name_;
     if (map_file_name.empty()) map_file_name = "GeoTiffMap";
     geotiff_writer.setMapFileName(map_file_name);
@@ -156,11 +154,6 @@ public:
     geotiff_writer.drawCoords();
 
     geotiff_writer.completed_map_ = completed;
-
-    RCLCPP_INFO(node_->get_logger(), "Writing geotiff plugins");
-    for (size_t i = 0; i < plugin_vector_.size(); ++i){
-      plugin_vector_[i]->draw(&geotiff_writer);
-    }
 
     RCLCPP_INFO(node_->get_logger(), "Writing geotiff");
     

@@ -31,10 +31,31 @@ def generate_launch_description():
         name='slam_toolbox',
         output='screen')
 
+    dad_vision_node = Node(
+        package='rrl_launchers',
+        executable='dad_vision',
+        name='dad_vision',
+        output='screen')
+
+    world_info_node = Node(
+        package='world_info',
+        executable='world_info',
+        name='world_info',
+        output='screen')
+    
+    geotiff_node = Node(
+        package='hector_geotiff',
+        executable='geotiff_node_slam_toolbox',
+        name='geotiff',
+        output='screen')
+    
     ld = LaunchDescription()
 
     ld.add_action(declare_use_sim_time_argument)
     ld.add_action(declare_slam_params_file_cmd)
     ld.add_action(start_async_slam_toolbox_node)
+    ld.add_action(dad_vision_node)
+    ld.add_action(world_info_node)
+    ld.add_action(geotiff_node)
 
     return ld
