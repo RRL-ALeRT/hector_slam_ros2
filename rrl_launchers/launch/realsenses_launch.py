@@ -9,30 +9,17 @@ from launch.substitutions import LaunchConfiguration
 
 def generate_launch_description():
 
-    rs_back = launch_ros.actions.Node(
+    rs_front = launch_ros.actions.Node(
         package="realsense2_camera",
         executable="realsense2_camera_node",
-        namespace="rs_back",
-        parameters=[{"serial_no": "_825312073924"},
-        {"depth_module.profile": "848x480x15"},
-        {"rgb_camera.profile": "640x480x30"},
-        {"enable_infra1": False},
-        {"enable_infra2": False},
-        {"infra_rgb": False},
-        {"align_depth.enable": False}]
-    )
-
-    rs_right = launch_ros.actions.Node(
-        package="realsense2_camera",
-        executable="realsense2_camera_node",
-        namespace="rs_right",
-        parameters=[{"serial_no": "_825312070259"},
+        namespace="rs_front",
+        parameters=[{"serial_no": "_826212070098"},
         {"depth_module.profile": "848x480x15"},
         {"rgb_camera.profile": "640x480x15"},
         {"enable_infra1": False},
         {"enable_infra2": False},
         {"infra_rgb": False},
-        {"align_depth.enable": False}]
+        {"align_depth.enable": True}]
     )
 
     rs_left = launch_ros.actions.Node(
@@ -45,25 +32,24 @@ def generate_launch_description():
         {"enable_infra1": False},
         {"enable_infra2": False},
         {"infra_rgb": False},
-        {"align_depth.enable": False}]
+        {"align_depth.enable": True}]
     )
 
-    cam4 = launch_ros.actions.Node(
+    rs_right = launch_ros.actions.Node(
         package="realsense2_camera",
         executable="realsense2_camera_node",
-        namespace="cam4",
-        parameters=[{"serial_no": "_825312073918"},
+        namespace="rs_right",
+        parameters=[{"serial_no": "_825312070259"},
         {"depth_module.profile": "848x480x15"},
         {"rgb_camera.profile": "640x480x15"},
         {"enable_infra1": False},
         {"enable_infra2": False},
         {"infra_rgb": False},
-        {"align_depth.enable": False}]
+        {"align_depth.enable": True}]
     )
 
     return launch.LaunchDescription([
-        rs_back,
-        # rs_right,
-        # rs_left,
-        #cam4,
+        rs_front,
+        rs_left,
+        rs_right,
     ])

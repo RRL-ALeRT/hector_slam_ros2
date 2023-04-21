@@ -42,7 +42,7 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    driver_share_dir = ament_index_python.packages.get_package_share_directory('velodyne_driver')
+    driver_share_dir = ament_index_python.packages.get_package_share_directory('rrl_launchers')
     driver_params_file = os.path.join(driver_share_dir, 'config', 'VLP16-velodyne_driver_node-params.yaml')
     velodyne_driver_node = launch_ros.actions.Node(package='velodyne_driver',
                                                    executable='velodyne_driver_node',
