@@ -37,6 +37,12 @@ def generate_launch_description():
         name='dad_vision',
         output='screen')
 
+    map_vision_node = Node(
+        package='rrl_launchers',
+        executable='map_vision',
+        name='map_vision',
+        output='screen')
+
     world_info_node = Node(
         package='world_info',
         executable='world_info',
@@ -54,8 +60,8 @@ def generate_launch_description():
     ld.add_action(declare_use_sim_time_argument)
     ld.add_action(declare_slam_params_file_cmd)
     ld.add_action(start_async_slam_toolbox_node)
-    ld.add_action(dad_vision_node)
-    ld.add_action(world_info_node)
+    # ld.add_action(dad_vision_node)
+    ld.add_action(map_vision_node)
     ld.add_action(geotiff_node)
 
     return ld

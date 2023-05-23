@@ -15,6 +15,9 @@ find_package(geometry_msgs REQUIRED)
 add_executable(dad_vision src/dad_vision.cpp)
 ament_target_dependencies(dad_vision rclcpp tf2 tf2_ros geometry_msgs)
 
+add_executable(map_vision src/map_vision.cpp)
+ament_target_dependencies(map_vision rclcpp tf2 tf2_ros geometry_msgs)
+
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )
@@ -29,6 +32,7 @@ install(DIRECTORY params
 
 install(TARGETS
   dad_vision
+  map_vision
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
