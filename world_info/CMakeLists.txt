@@ -86,6 +86,9 @@ rclcpp_components_register_node(door_seg
 PLUGIN "world_info::DetectDoorSeg"
 EXECUTABLE door_seg_node)
 
+add_executable(motion src/motion.cpp)
+ament_target_dependencies(motion rclcpp rclcpp_components cv_bridge image_transport OpenCV)
+
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME})
 
@@ -108,6 +111,7 @@ install(TARGETS
 
 install(TARGETS
   world_info
+  motion
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
