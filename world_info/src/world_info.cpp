@@ -87,9 +87,9 @@ void add_to_mean(geometry_msgs::msg::Pose& mean, const geometry_msgs::msg::Pose 
 }
 
 bool within_one_meter_range(const geometry_msgs::msg::Pose mean, const geometry_msgs::msg::Pose newPose) {
-  if (std::abs(mean.position.x - newPose.position.x) > 1.0) return false;
-  if (std::abs(mean.position.y - newPose.position.y) > 1.0) return false;
-  if (std::abs(mean.position.z - newPose.position.z) > 1.0) return false;
+  if (std::abs(mean.position.x - newPose.position.x) > 1.0)
+    if (std::abs(mean.position.y - newPose.position.y) > 1.0)
+      if (std::abs(mean.position.z - newPose.position.z) > 1.0) return false;
   return true;
 }
 

@@ -80,6 +80,11 @@ def generate_launch_description():
                     plugin='velodyne_laserscan::VelodyneLaserScan',
                     name='velodyne_laserscan_node',
                     parameters=[laserscan_params]),
+                ComposableNode(
+                    package='rrl_launchers',
+                    plugin='rrl_launchers::FilteredPointCloud',
+                    name='filter_pcl',
+                    parameters=[laserscan_params]),
             ],
             output='both',
     )
@@ -91,25 +96,25 @@ def generate_launch_description():
         arguments=['-0.238', '0.0', '0.2', '0.', '0.', '1.', '0.', 'body', 'velodyne'],
     )
 
-    tf_rs_back = Node(
+    tf_rs_front = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         output='screen',
-        arguments=['-0.258', '-0.032', '0.202', '-0.707', '0.0', '0.707', '0.0', 'head', 'rs_back'],
+        arguments=['0.383', '0.0325', '0.156', '0.0', '0.0', '0.0', '1.0', 'body', 'rs_front'],
     )
 
     tf_rs_left = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         output='screen',
-        arguments=['-0.22', '0.12', '0.202', '0.5', '-0.5', '-0.5', '-0.5', 'head', 'rs_left'],
+        arguments=['-0.23', '0.092', '0.18', '0.0', '0.0', '0.707', '0.707', 'body', 'rs_left'],
     )
 
     tf_rs_right = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         output='screen',
-        arguments=['-0.156', '-0.12', '0.202', '0.5', '0.5', '-0.5', '0.5', 'head', 'rs_right'],
+        arguments=['-0.156', '-0.092', '0.18', '0.0', '0.0', '-0.707', '0.707', 'body', 'rs_right'],
     )
 
-    return LaunchDescription([container, tf_velo])#, tf_rs_back, tf_rs_left, tf_rs_right])
+    return LaunchDescription([container, tf_velo, tf_rs_front, tf_rs_left, tf_rs_right])

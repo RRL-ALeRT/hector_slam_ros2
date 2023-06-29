@@ -32,30 +32,28 @@ class DetectQR : public rclcpp::Node
 {
   public:
     explicit DetectQR(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
-    : Node("qrcode", options),
+    : Node("qrcode", options)
       // topics
       // sub_cam(image_transport::create_camera_subscription(this, "image_rect",
       //   std::bind(&DetectQR::onCamera, this, std::placeholders::_1, std::placeholders::_2),
       //   declare_parameter("image_transport", "raw", descr({}, true)), rmw_qos_profile_sensor_data)),
-      sub_cam(image_transport::create_subscription(this, "image_rect",
-        std::bind(&DetectQR::onCamera, this, std::placeholders::_1),
-        declare_parameter("image_transport", "raw", descr({}, true)), rmw_qos_profile_sensor_data)),
-      pub_qr(image_transport::create_publisher(this, "qr_detected"))
+      // sub_cam(image_transport::create_subscription(this, "image_rect",
+      //   std::bind(&DetectQR::onCamera, this, std::placeholders::_1),
+      //   declare_parameter("image_transport", "raw", descr({}, true)), rmw_qos_profile_sensor_data)),
+      // pub_qr(image_transport::create_publisher(this, "qr_detected"))
     {
+        frame_id = "realsense";
+        if (!has_parameter("frame_id"))
+            declare_parameter("frame_id", frame_id);
+        get_parameter("frame_id", frame_id);
+
         // Initialize TransformBroadcaster
         tfb_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
-        square_length = 0.2;
-        if(!has_parameter("qr_square_length"))
-          declare_parameter("qr_square_length", square_length);
-        get_parameter("qr_square_length", square_length);
+        cam_sub = create_subscription<sensor_msgs::msg::Image>("/camera/color/image_raw", 1, std::bind(&DetectQR::onCamera, this, std::placeholders::_1));
+        depth_sub = create_subscription<sensor_msgs::msg::Image>("/camera/aligned_depth_to_color/image_raw", 1, std::bind(&DetectQR::onDepthCamera, this, std::placeholders::_1));
 
-        ref_points = {
-          {-square_length / 2,  square_length / 2, 0},
-          { square_length / 2,  square_length / 2, 0},
-          { square_length / 2, -square_length / 2, 0},
-          {-square_length / 2, -square_length / 2, 0}
-        };
+        cam_info = create_subscription<sensor_msgs::msg::CameraInfo>("/camera/color/camera_info", 1, std::bind(&DetectQR::onCameraInfo, this, std::placeholders::_1));
 
         // Create WorldInfo publisher
         world_info_pub_ = create_publisher<world_info_msgs::msg::WorldInfo>("/world_info_sub", 1);
@@ -64,7 +62,7 @@ class DetectQR : public rclcpp::Node
   private:
     // void onCamera(const sensor_msgs::msg::Image::ConstSharedPtr& msg_img,
     //               const sensor_msgs::msg::CameraInfo::ConstSharedPtr& msg_ci) # webots camera and info_msgs are not synced
-    void onCamera(const sensor_msgs::msg::Image::ConstSharedPtr& msg_img)
+    void onCamera(const sensor_msgs::msg::Image::SharedPtr msg_img)
     {
       // Convert the image message to a cv::Mat object
       cv::Mat frame;
@@ -105,49 +103,34 @@ class DetectQR : public rclcpp::Node
           int x1 = symbol->get_location_x(3);
           int y1 = symbol->get_location_y(3);
 
-          std::vector<cv::Point2f> corners = {
-            cv::Point2f(x1, y1),
-            cv::Point2f(x2, y2),
-            cv::Point2f(x3, y3),
-            cv::Point2f(x4, y4)
-          };
+          std::vector<int> x_vec {x1,x2,x3,x4};
+          std::vector<int> y_vec {y1,y2,y3,y4};
 
-          // Define camera intrinsic parameters
-          cv::Mat K = (cv::Mat_<double>(3, 3) << -292.878, 0, 160, 0, 292.878, 95, 0, 0, 1);
-          cv::Mat D = (cv::Mat_<double>(1, 5) << 0, 0, 0, 0, 0);
+          int min_x = *std::min_element(x_vec.begin(), x_vec.end());
+          int max_x = *std::max_element(x_vec.begin(), x_vec.end());
+          int min_y = *std::min_element(y_vec.begin(), y_vec.end());
+          int max_y = *std::max_element(y_vec.begin(), y_vec.end());
+          
+          float pose_x;
+          float pose_y;
+          float pose_z;
 
-          // Estimate the pose of the square using the corner points and the reference frame
-          cv::Mat rvec, tvec;
-          cv::solvePnP(ref_points, corners, K, D, rvec, tvec, false, cv::SOLVEPNP_IPPE_SQUARE);
+          median_depth_xyz(std::vector<float> {min_x, max_x}, std::vector<float> {min_y, max_y}, pose_x, pose_y, pose_z);
 
-          // Extract the rotation matrix from the rvec vector
-          cv::Mat rot_mat;
-          cv::Rodrigues(rvec, rot_mat);
-
-          // Adjust orientation for tf2
-          cv::Mat r;
-          euler_to_matrix(-M_PI/2, 0, -M_PI/2, r);
-          rot_mat = r * rot_mat;
-
-          // The position of the square can be extracted from the pose matrix as follows:
-          cv::Point3f position(tvec.at<double>(0, 0),
-                              tvec.at<double>(1, 0),
-                              tvec.at<double>(2, 0));
-
-          // Convert the rotation matrix to a quaternion
-          geometry_msgs::msg::Quaternion quat;
-          matrix_to_quat(rot_mat, quat);
+          if (std::isnan(pose_x) || std::isnan(pose_y) || std::isnan(pose_z))
+              return;
+          if (std::isinf(pose_x) || std::isinf(pose_y) || std::isinf(pose_z))
+              return;
 
           geometry_msgs::msg::TransformStamped tf_msg;
           tf_msg.header.stamp = msg_img->header.stamp;
-          tf_msg.header.frame_id = "kinect";
+          tf_msg.header.frame_id = frame_id;
 
           // Set the transform message fields
           tf_msg.child_frame_id = symbol->get_data();
-          tf_msg.transform.translation.x = position.z;
-          tf_msg.transform.translation.y = position.x;
-          tf_msg.transform.translation.z = -position.y;
-          tf_msg.transform.rotation = quat;
+          tf_msg.transform.translation.x = pose_z;
+          tf_msg.transform.translation.y = -pose_x;
+          tf_msg.transform.translation.z = -pose_y;
 
           // Publish the transform message
           tfb_->sendTransform(tf_msg);
@@ -155,24 +138,16 @@ class DetectQR : public rclcpp::Node
           // Publish the QR code poses
           world_info_msgs::msg::WorldInfo world_info_msg;
 
+          world_info_msg.header.frame_id = frame_id;
           world_info_msg.header.stamp = msg_img->header.stamp;
           world_info_msg.num = symbol->get_data();
           world_info_msg.pose.position.x = tf_msg.transform.translation.x;
           world_info_msg.pose.position.y = tf_msg.transform.translation.y;
           world_info_msg.pose.position.z = tf_msg.transform.translation.z;
-          world_info_msg.pose.orientation = quat;
+          world_info_msg.type = "qr";
 
           // Publish the WorldInfo message
           world_info_pub_->publish(world_info_msg);
-
-          // Draw lines around the QR code
-          cv::line(frame, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(0, 255, 0), 2);
-          cv::line(frame, cv::Point(x2, y2), cv::Point(x3, y3), cv::Scalar(0, 255, 0), 2);
-          cv::line(frame, cv::Point(x3, y3), cv::Point(x4, y4), cv::Scalar(0, 255, 0), 2);
-          cv::line(frame, cv::Point(x4, y4), cv::Point(x1, y1), cv::Scalar(0, 255, 0), 2);
-
-          // Draw point at top left corner
-          cv::circle(frame, cv::Point(x2, y2), 4, cv::Scalar(0, 0, 255), -1);
         }
       }
       catch (cv::Exception &e)
@@ -180,34 +155,96 @@ class DetectQR : public rclcpp::Node
         RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
         return;
       }
-      // Display the frame
-      sensor_msgs::msg::Image::SharedPtr img_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", frame)
-                  .toImageMsg();
-      pub_qr.publish(*img_msg.get());
-    }
-    
-    // Convert a rotation matrix to a quaternion
-    void matrix_to_quat(const cv::Mat& rot_mat, geometry_msgs::msg::Quaternion& quat)
-    {
-      tf2::Matrix3x3 tf_rot_mat(rot_mat.at<double>(0, 0), rot_mat.at<double>(0, 1), rot_mat.at<double>(0, 2),
-                                rot_mat.at<double>(1, 0), rot_mat.at<double>(1, 1), rot_mat.at<double>(1, 2),
-                                rot_mat.at<double>(2, 0), rot_mat.at<double>(2, 1), rot_mat.at<double>(2, 2));
-      tf2::Quaternion tf_quat;
-      tf_rot_mat.getRotation(tf_quat);
-      quat.x = tf_quat.x();
-      quat.y = tf_quat.y();
-      quat.z = tf_quat.z();
-      quat.w = tf_quat.w();
     }
 
-    // Convert Euler angles (roll, pitch, yaw) to a rotation matrix
-    void euler_to_matrix(double roll, double pitch, double yaw, cv::Mat& rot_mat)
+    void onDepthCamera(const sensor_msgs::msg::Image::SharedPtr msg_img)
     {
-      tf2::Matrix3x3 tf_rot_mat;
-      tf_rot_mat.setEulerYPR(yaw, pitch, roll);
-      rot_mat = (cv::Mat_<double>(3, 3) << tf_rot_mat[0][0], tf_rot_mat[0][1], tf_rot_mat[0][2],
-                tf_rot_mat[1][0], tf_rot_mat[1][1], tf_rot_mat[1][2],
-                tf_rot_mat[2][0], tf_rot_mat[2][1], tf_rot_mat[2][2]);
+        if (fx == 0.0) {
+            RCLCPP_INFO_ONCE(get_logger(), "waiting to read camera info");
+            return;
+        }
+        RCLCPP_INFO_ONCE(get_logger(), "hazmat detection sub got first depth cam messsage");
+        // Convert the image message to a cv::Mat object
+        try
+        {
+            depth_frame = cv_bridge::toCvShare(msg_img, "32FC1")->image;
+        }
+
+        catch (cv_bridge::Exception &e)
+        {
+            RCLCPP_ERROR(get_logger(), "cv_bridge exception: %s", e.what());
+            return;
+        }
+    }
+    
+    void onCameraInfo(const sensor_msgs::msg::CameraInfo::SharedPtr msg)
+    {
+        fx = msg->k[0];
+        cx = msg->k[2];
+        fy = msg->k[4];
+        cy = msg->k[5];
+    }
+
+    void median_depth_xyz(const std::vector<float> vec_x, const std::vector<float> vec_y, float& x, float& y, float& z)
+    {
+        std::vector<float> depth_values;
+        if (vec_x.size() == 2) {
+            // within a bounding box
+            for (int i = vec_x[0]; i < vec_x[1]; i++) {
+                for (int j = vec_y[0]; j < vec_y[1]; j++) {
+                    float d = 0.001*depth_frame.at<float>(j,i);
+                    if (0.01 < d < 4.0) {
+                        depth_values.push_back(d); // row num, column num
+                    }
+                }
+            }
+        }
+        else {
+            // within a mask
+            for (int x: vec_x) {
+                for (int y: vec_y) {
+                    float d = 0.001*depth_frame.at<float>(y,x);
+                    if (0.01 < d < 4.0) {
+                        depth_values.push_back(d); // row num, column num
+                    }
+                }
+            }
+        }
+
+        float median_depth = findMedian(depth_values);
+        
+        // Get a depth frame and a pixel coordinate
+        float pixel_x = std::accumulate(vec_x.begin(), vec_x.end(), 0.0f) / vec_x.size();
+        float pixel_y = std::accumulate(vec_y.begin(), vec_y.end(), 0.0f) / vec_y.size();
+
+        // Convert the pixel coordinates to 3D world coordinates
+        pixel_to_point(pixel_x, pixel_y, median_depth, fx, fy, cx, cy, x, y, z);
+        
+    }
+
+    // Convert pixel coordinates to 3D world coordinates
+    void pixel_to_point(float x, float y, float depth_value, float fx, float fy, float cx, float cy, float& x_out, float& y_out, float& z_out) {
+        x_out = (x - cx) * depth_value / fx;
+        y_out = (y - cy) * depth_value / fy;
+        z_out = depth_value;
+    }
+
+    void removeInfAndZeroValues(std::vector<float>& vec) {
+        vec.erase(std::remove_if(vec.begin(), vec.end(), [](float f) {
+            return f == std::numeric_limits<float>::infinity() || f == 0.0f;
+        }), vec.end());
+    }
+
+    float findMedian(std::vector<float>& vec) {
+        auto n = vec.size();
+        auto middle = vec.begin() + n / 2;
+        std::nth_element(vec.begin(), middle, vec.end());
+        if (n % 2 == 0) {
+            auto left_middle = std::max_element(vec.begin(), middle);
+            return (*left_middle + *middle) / 2.0f;
+        } else {
+            return *middle;
+        }
     }
 
   zbar::ImageScanner scanner;
@@ -218,6 +255,19 @@ class DetectQR : public rclcpp::Node
   const image_transport::Subscriber sub_cam;
   const image_transport::Publisher pub_qr;
   rclcpp::Publisher<world_info_msgs::msg::WorldInfo>::SharedPtr world_info_pub_;
+
+  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr cam_sub;
+  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr depth_sub;
+  rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr cam_info;
+
+  // Camera Intrinsics
+  float fx = 0.0;
+  float fy = 0.0;
+  float cx = 0.0;
+  float cy = 0.0;
+
+  std::string frame_id;
+  cv::Mat depth_frame;
 };
 
 }  // namespace world_info

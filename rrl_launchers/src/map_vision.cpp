@@ -22,6 +22,8 @@ public:
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     tf_static_broadcaster_ = std::make_unique<tf2_ros::StaticTransformBroadcaster>(this);
 
+    pub = this->create_publisher<geometry_msgs::msg::TransformStamped>("/map_to_body", 1);
+
     // Call on_timer function every second
     timer_ = this->create_wall_timer(
       0.5s, std::bind(&FrameListener::on_timer, this));
@@ -40,6 +42,7 @@ private:
         t = tf_buffer_->lookupTransform(
           fromFrameRel, toFrameRel,
           tf2::TimePointZero);
+        tf2_published = true;
       } catch (const tf2::TransformException & ex) {
         RCLCPP_INFO(this->get_logger(), "%s", ex.what());
         return;
@@ -47,13 +50,24 @@ private:
     }
 
     t.header.frame_id = "map";
-    t.child_frame_id = "dad_vision";
+    t.child_frame_id = "vision";
     tf_static_broadcaster_->sendTransform(t);
-    tf2_published = true;
-    // timer_->reset();
+
+    try {
+      t_map_body = tf_buffer_->lookupTransform(
+        "body", "map",
+        tf2::TimePointZero);
+      pub->publish(t_map_body);
+    } catch (const tf2::TransformException & ex) {
+      RCLCPP_INFO(this->get_logger(), "%s", ex.what());
+      return;
+    }
   }
 
   geometry_msgs::msg::TransformStamped t;
+  geometry_msgs::msg::TransformStamped t_map_body;
+
+  rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr pub;
 
   bool tf2_published = false;
   rclcpp::TimerBase::SharedPtr timer_{nullptr};

@@ -108,13 +108,16 @@ namespace world_info
         public:
 
         explicit DetectHazmatSeg(const rclcpp::NodeOptions &options = rclcpp::NodeOptions())
-        : Node("hazmat_seg", options),
+        : Node("hazmat_seg", options)
        	// topics
-        sub_cam(image_transport::create_subscription(this, "image_rect",
-            std::bind(&DetectHazmatSeg::onCamera, this, std::placeholders::_1),
-            declare_parameter("image_transport", "raw", descr( {}, true)), rmw_qos_profile_sensor_data)),
-        pub_hazmat_seg(image_transport::create_publisher(this, "hazmat_seg_detected"))
+        // sub_cam(image_transport::create_subscription(this, "image_rect",
+        //     std::bind(&DetectHazmatSeg::onCamera, this, std::placeholders::_1),
+        //     declare_parameter("image_transport", "raw", descr( {}, true)), rmw_qos_profile_sensor_data)),
+        // pub_hazmat_seg(image_transport::create_publisher(this, "hazmat_seg_detected"))
         {
+            cam_sub = create_subscription<sensor_msgs::msg::Image>("/image_raw", 1, std::bind(&DetectHazmat::onCamera, this, std::placeholders::_1));
+            depth_sub = create_subscription<sensor_msgs::msg::Image>("/image_rect", 1, std::bind(&DetectHazmat::onDepthCamera, this, std::placeholders::_1));
+
            	// Create WorldInfo publisher
             world_info_pub_ = create_publisher<world_info_msgs::msg::WorldInfo>("/world_info_sub", 1);
 
@@ -133,6 +136,11 @@ namespace world_info
                 declare_parameter("inference_mode", inference_mode);
             get_parameter("inference_mode", inference_mode);
 
+            frame_id = "realsense";
+            if (!has_parameter("frame_id"))
+                declare_parameter("frame_id", frame_id);
+            get_parameter("frame_id", frame_id);
+            
             std::string package_share_directory = ament_index_cpp::get_package_share_directory("world_info");
             model = core.read_model(package_share_directory + "/weights/hazmat_seg.onnx");
         }
@@ -144,7 +152,7 @@ namespace world_info
 
         private:
 
-        void onCamera(const sensor_msgs::msg::Image::ConstSharedPtr &msg_img)
+        void onCamera(const sensor_msgs::msg::Image::SharedPtr msg_img)
         {
             // Convert the image message to a cv::Mat object
             cv::Mat img;
@@ -326,15 +334,97 @@ namespace world_info
                 return;
             }
 
-            sensor_msgs::msg::Image::SharedPtr img_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", img)
-                .toImageMsg();
-            pub_hazmat_seg.publish(*img_msg.get());
+            // sensor_msgs::msg::Image::SharedPtr img_msg = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", img)
+            //     .toImageMsg();
+            // pub_hazmat_seg.publish(*img_msg.get());
+        }
+
+        void onDepthCamera(const sensor_msgs::msg::Image::SharedPtr msg_img)
+        {
+            RCLCPP_INFO_ONCE(get_logger(), "hazmat detection sub got first depth cam messsage");
+           	// Convert the image message to a cv::Mat object
+            try
+            {
+                depth_frame = cv_bridge::toCvShare(msg_img, "16UC1")->image;
+            }
+
+            catch (cv_bridge::Exception &e)
+            {
+                RCLCPP_ERROR(get_logger(), "cv_bridge exception: %s", e.what());
+                return;
+            }
+        }
+        
+        void median_depth_xyz(const std::vector<float> vec_x, const std::vector<float> vec_y, float& x, float& y, float& z)
+        {
+            std::vector<float> depth_values;
+            if (vec_x.size() == 2) {
+                // within a bounding box
+                for (int i = vec_x[0]; i < vec_x[1]; i++) {
+                    for (int j = vec_y[0]; j < vec_y[1]; j++) {
+                        depth_values.push_back(depth_frame.at<float>(j,i)); // row num, column num
+                    }
+                }
+            }
+            else {
+                // within a mask
+                for (int x: vec_x) {
+                    for (int y: vec_y) {
+                        depth_values.push_back(depth_frame.at<float>(y,x));
+                    }
+                }
+            }
+
+            removeInfAndZeroValues(depth_values);
+            float median_depth = findMedian(depth_values);
+
+            // Intrinsic parameters of the depth camera
+            float fx = 212.1688885346757;
+            float fy = 212.1688885346757;
+            float cx = 212;
+            float cy = 120;
+            
+            // Get a depth frame and a pixel coordinate
+            float pixel_x = std::accumulate(vec_x.begin(), vec_x.end(), 0.0f) / vec_x.size();
+            float pixel_y = std::accumulate(vec_y.begin(), vec_y.end(), 0.0f) / vec_y.size();
+
+            // Convert the pixel coordinates to 3D world coordinates
+            pixel_to_point(pixel_x, pixel_y, median_depth, fx, fy, cx, cy, x, y, z);
+            
+        }
+
+        // Convert pixel coordinates to 3D world coordinates
+        void pixel_to_point(float x, float y, float depth_value, float fx, float fy, float cx, float cy, float& x_out, float& y_out, float& z_out) {
+            x_out = (x - cx) * depth_value / fx;
+            y_out = (y - cy) * depth_value / fy;
+            z_out = depth_value;
+        }
+
+        void removeInfAndZeroValues(std::vector<float>& vec) {
+            vec.erase(std::remove_if(vec.begin(), vec.end(), [](float f) {
+                return f == std::numeric_limits<float>::infinity() || f == 0.0f;
+            }), vec.end());
+        }
+
+        float findMedian(std::vector<float>& vec) {
+            auto n = vec.size();
+            auto middle = vec.begin() + n / 2;
+            std::nth_element(vec.begin(), middle, vec.end());
+            if (n % 2 == 0) {
+                auto left_middle = std::max_element(vec.begin(), middle);
+                return (*left_middle + *middle) / 2.0f;
+            } else {
+                return *middle;
+            }
         }
 
        	// const image_transport::CameraSubscriber sub_cam;
         const image_transport::Subscriber sub_cam;
         const image_transport::Publisher pub_hazmat_seg;
         rclcpp::Publisher<world_info_msgs::msg::WorldInfo>::SharedPtr world_info_pub_;
+
+        rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr cam_sub;
+        rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr depth_sub;
 
         ov::Core core;
         std::shared_ptr<ov::Model>model;

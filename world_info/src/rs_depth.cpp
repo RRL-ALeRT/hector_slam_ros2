@@ -29,23 +29,24 @@ class RSDepth : public rclcpp::Node
 {
   public:
     explicit RSDepth(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
-    : Node("rs_depth", options),
+    : Node("rs_depth", options)
       // topics
       // sub_cam(image_transport::create_camera_subscription(this, "image_rect",
       //   std::bind(&RSDepth::onCamera, this, std::placeholders::_1, std::placeholders::_2),
       //   declare_parameter("image_transport", "raw", descr({}, true)), rmw_qos_profile_sensor_data)),
-      sub_cam(image_transport::create_subscription(this, "/Spot/kinect_range",
-        std::bind(&RSDepth::onCamera, this, std::placeholders::_1),
-        declare_parameter("image_transport", "raw", descr({}, true)), rmw_qos_profile_sensor_data))
+      // sub_cam(image_transport::create_subscription(this, "image_rect",
+      //   std::bind(&RSDepth::onCamera, this, std::placeholders::_1),
+      //   declare_parameter("image_transport", "raw", descr({}, true)), rmw_qos_profile_sensor_data))
     {
       median_service = create_service<GetMedianDepthXYZ>("get_median_depth_xyz", 
               std::bind(&RSDepth::median_depth_xyz, this, std::placeholders::_1,std::placeholders::_2,std::placeholders::_3));
+      cam_sub = create_subscription<sensor_msgs::msg::Image>("/image_rect", 1, std::bind(&RSDepth::onCamera, this, std::placeholders::_1));
     }
 
   private:
     // void onCamera(const sensor_msgs::msg::Image::ConstSharedPtr& msg_img,
     //               const sensor_msgs::msg::CameraInfo::ConstSharedPtr& msg_ci) # webots camera and info_msgs are not synced
-    void onCamera(const sensor_msgs::msg::Image::ConstSharedPtr& msg_img)
+    void onCamera(const sensor_msgs::msg::Image::SharedPtr msg_img)
     {
       // Convert the image message to a cv::Mat object
       try
@@ -141,6 +142,8 @@ class RSDepth : public rclcpp::Node
   int latest_msg_time;
 
   rclcpp::Service<GetMedianDepthXYZ>::SharedPtr median_service;
+
+  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr cam_sub;
 
 };
 

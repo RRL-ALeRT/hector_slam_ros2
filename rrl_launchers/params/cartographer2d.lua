@@ -21,12 +21,12 @@ options = {
   map_builder = MAP_BUILDER,
   trajectory_builder = TRAJECTORY_BUILDER,
   map_frame = "map",
-  tracking_frame = "vision", -- this should be the link of IMU 
+  tracking_frame = "imu_link", -- this should be the link of IMU --vision
   published_frame = "body", -- use base_link while playing rosbag
-  odom_frame = "vision",
+  odom_frame = "vision", --vision
   provide_odom_frame = false,
   publish_frame_projected_to_2d = false, 
-  use_odometry = false,
+  use_odometry = true,
   use_nav_sat = false,
   use_landmarks = false,
 
@@ -57,7 +57,7 @@ TRAJECTORY_BUILDER_2D.num_accumulated_range_data = 1 --default value is 10; If m
 
 TRAJECTORY_BUILDER_2D.min_range = 0.9 --0.3
 --TRAJECTORY_BUILDER_2D.missing_data_ray_length = 1.
-TRAJECTORY_BUILDER_2D.use_imu_data = false --important, if this one is true ,then you need to set the track frame as imu, it's kvh_link here. Besides, ium is not neccessary for 2d slam but neccessary for 3d cases
+TRAJECTORY_BUILDER_2D.use_imu_data = true --important, if this one is true ,then you need to set the track frame as imu, it's kvh_link here. Besides, ium is not neccessary for 2d slam but neccessary for 3d cases
 
  
 ------------------SCAN MATCHER (FRONT END----LOCAL MAP----Lidar Odometry)
