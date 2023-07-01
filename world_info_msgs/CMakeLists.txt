@@ -16,6 +16,8 @@ find_package(visualization_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/WorldInfo.msg"
   "msg/WorldInfoArray.msg"
+  "msg/BoundingBox.msg"
+  "msg/BoundingBoxArray.msg"
   "srv/GetMedianDepthXYZ.srv"
   DEPENDENCIES builtin_interfaces geometry_msgs std_msgs visualization_msgs
 )
