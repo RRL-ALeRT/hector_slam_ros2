@@ -100,21 +100,21 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         output='screen',
-        arguments=['0.383', '0.0325', '0.156', '0.0', '0.0', '0.0', '1.0', 'body', 'rs_front'],
+        arguments=['0.396', '0.0325', '0.155', '0.0', '0.0', '0.0', '1.0', 'body', 'rs_front'],
     )
 
     tf_rs_left = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         output='screen',
-        arguments=['-0.23', '0.092', '0.18', '0.0', '0.0', '0.707', '0.707', 'body', 'rs_left'],
+        arguments=['-0.175', '0.1159', '0.139', '0.1830127', '-0.1830127', '0.6830127', '0.6830127', 'body', 'rs_left'],
     )
 
     tf_rs_right = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         output='screen',
-        arguments=['-0.156', '-0.092', '0.18', '0.0', '0.0', '-0.707', '0.707', 'body', 'rs_right'],
+        arguments=['-0.111', '-0.1156', '0.139', '0.1830127', '0.1830127', '0.6830127', '-0.6830127', 'body', 'rs_right'],
     )
 
-    return LaunchDescription([container, tf_velo])#, tf_rs_front, tf_rs_left, tf_rs_right])
+    return LaunchDescription([container, tf_velo, tf_rs_front, tf_rs_left, tf_rs_right])
