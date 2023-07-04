@@ -23,9 +23,15 @@ find_package(OpenCV REQUIRED)
 find_package(OpenVINO REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(image_transport REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
 add_executable(world_info src/world_info.cpp)
 ament_target_dependencies(world_info rclcpp world_info_msgs tf2_ros tf2_geometry_msgs)
+
+add_executable(object_detection_yolov5 src/object_detection_yolov5.cpp)
+target_link_libraries(object_detection_yolov5 $ENV{INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so ${YAML_CPP_LIBRARIES})
+target_include_directories(object_detection_yolov5 PUBLIC $ENV{INTEL_OPENVINO_DIR}/runtime/include $ENV{INTEL_OPENVINO_DIR}/runtime/include/ie ${YAML_CPP_INCLUDE_DIR})
+ament_target_dependencies(object_detection_yolov5 rclcpp world_info_msgs tf2_ros tf2_geometry_msgs yaml-cpp OpenCV image_transport cv_bridge)
 
 add_library(qrcode SHARED src/qrcode.cpp)
 ament_target_dependencies(qrcode rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport Eigen3 OpenCV cv_bridge tf2_ros)
@@ -89,8 +95,6 @@ install(TARGETS
   aruco
   babyface
   firenet
-  hazmat
-  #hazmat_seg
   door_seg
   rs_depth
   ARCHIVE DESTINATION lib
@@ -100,6 +104,7 @@ install(TARGETS
 
 install(TARGETS
   world_info
+  object_detection_yolov5
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()

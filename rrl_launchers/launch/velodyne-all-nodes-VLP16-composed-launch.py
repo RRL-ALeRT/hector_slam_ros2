@@ -93,7 +93,7 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         output='screen',
-        arguments=['-0.238', '0.0', '0.2', '0.', '0.', '1.', '0.', 'body', 'velodyne'],
+        arguments=['0.381', '0.0', '0.321', '0.', '0.', '-0.0239', '0.999', 'body', 'velodyne'],
     )
 
     tf_rs_front = Node(
@@ -117,4 +117,4 @@ def generate_launch_description():
         arguments=['-0.156', '-0.092', '0.18', '0.0', '0.0', '-0.707', '0.707', 'body', 'rs_right'],
     )
 
-    return LaunchDescription([container, tf_velo, tf_rs_front, tf_rs_left, tf_rs_right])
+    return LaunchDescription([container, tf_velo])#, tf_rs_front, tf_rs_left, tf_rs_right])
