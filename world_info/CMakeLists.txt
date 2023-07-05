@@ -24,9 +24,14 @@ find_package(OpenVINO REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(hector_nav_msgs REQUIRED)
 
 add_executable(world_info src/world_info.cpp)
-ament_target_dependencies(world_info rclcpp world_info_msgs tf2_ros tf2_geometry_msgs)
+ament_target_dependencies(world_info rclcpp world_info_msgs tf2_ros tf2_geometry_msgs std_srvs hector_nav_msgs)
+
+add_executable(map_vision src/map_vision.cpp)
+ament_target_dependencies(map_vision rclcpp tf2 tf2_ros geometry_msgs visualization_msgs std_srvs hector_nav_msgs)
 
 add_executable(object_detection_yolov5 src/object_detection_yolov5.cpp)
 target_link_libraries(object_detection_yolov5 $ENV{INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so ${YAML_CPP_LIBRARIES})
@@ -105,6 +110,7 @@ install(TARGETS
 install(TARGETS
   world_info
   object_detection_yolov5
+  map_vision
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
