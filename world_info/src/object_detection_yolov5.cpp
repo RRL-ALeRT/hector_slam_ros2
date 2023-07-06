@@ -139,7 +139,7 @@ private:
     cv::Mat img = cv_ptr->image;
 
     try {
-      Resize res = resize_and_pad(img, cv::Size(640, 640));
+      Resize res = resize_and_pad(img, cv::Size(416, 416));
 
       // Create tensor from image
       float *input_data = (float*) res.resized_image.data;

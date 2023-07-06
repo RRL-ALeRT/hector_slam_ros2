@@ -36,12 +36,9 @@ ament_target_dependencies(object_detection_yolov5 rclcpp world_info_msgs tf2_ros
 add_executable(tf2_object_detection_yolov5 src/tf2_object_detection_yolov5.cpp)
 ament_target_dependencies(tf2_object_detection_yolov5 rclcpp rclcpp_components sensor_msgs image_transport OpenCV cv_bridge world_info_msgs tf2_ros)
 
-add_library(qrcode SHARED src/qrcode.cpp)
+add_executable(qrcode src/qrcode.cpp)
 ament_target_dependencies(qrcode rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport Eigen3 OpenCV cv_bridge tf2_ros)
 target_link_libraries(qrcode ${ZBAR_LIBRARIES} zbar)
-rclcpp_components_register_node(qrcode
-PLUGIN "world_info::DetectQR"
-EXECUTABLE qrcode_node)
 
 add_library(aruco SHARED src/aruco.cpp)
 ament_target_dependencies(aruco rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport Eigen3 OpenCV cv_bridge tf2_ros)
@@ -105,6 +102,7 @@ install(TARGETS
   motion
   object_detection_yolov5
   tf2_object_detection_yolov5
+  qrcode
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
