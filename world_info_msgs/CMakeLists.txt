@@ -18,6 +18,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/WorldInfoArray.msg"
   "msg/BoundingBox.msg"
   "msg/BoundingBoxArray.msg"
+  "msg/BoundingPolygon.msg"
+  "msg/BoundingPolygonArray.msg"
   "srv/GetMedianDepthXYZ.srv"
   DEPENDENCIES builtin_interfaces geometry_msgs std_msgs visualization_msgs
 )
