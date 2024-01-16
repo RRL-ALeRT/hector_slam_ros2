@@ -26,6 +26,7 @@ find_package(image_transport REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(hector_nav_msgs REQUIRED)
+find_package(webots_spot_msgs REQUIRED)
 
 add_executable(world_info src/world_info.cpp)
 ament_target_dependencies(world_info rclcpp world_info_msgs tf2_ros tf2_geometry_msgs std_srvs hector_nav_msgs)
@@ -34,19 +35,19 @@ add_executable(map_vision src/map_vision.cpp)
 ament_target_dependencies(map_vision rclcpp tf2 tf2_ros geometry_msgs visualization_msgs std_srvs hector_nav_msgs)
 
 add_executable(object_detection_yolov5 src/object_detection_yolov5.cpp)
-target_link_libraries(object_detection_yolov5 $ENV{INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so ${YAML_CPP_LIBRARIES})
-target_include_directories(object_detection_yolov5 PUBLIC $ENV{INTEL_OPENVINO_DIR}/runtime/include $ENV{INTEL_OPENVINO_DIR}/runtime/include/ie ${YAML_CPP_INCLUDE_DIR})
+target_link_libraries(object_detection_yolov5 openvino::runtime ${YAML_CPP_LIBRARIES})
+target_include_directories(object_detection_yolov5 PUBLIC ${YAML_CPP_INCLUDE_DIR})
 ament_target_dependencies(object_detection_yolov5 rclcpp world_info_msgs tf2_ros tf2_geometry_msgs yaml-cpp OpenCV image_transport cv_bridge)
 
-add_library(qrcode SHARED src/qrcode.cpp)
+add_executable(tf2_object_detection_yolov5 src/tf2_object_detection_yolov5.cpp)
+ament_target_dependencies(tf2_object_detection_yolov5 rclcpp sensor_msgs image_transport OpenCV cv_bridge world_info_msgs tf2_ros)
+
+add_executable(qrcode src/qrcode.cpp)
 ament_target_dependencies(qrcode rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport Eigen3 OpenCV cv_bridge tf2_ros)
 target_link_libraries(qrcode ${ZBAR_LIBRARIES} zbar)
-rclcpp_components_register_node(qrcode
-PLUGIN "world_info::DetectQR"
-EXECUTABLE qrcode_node)
 
 add_library(aruco SHARED src/aruco.cpp)
-ament_target_dependencies(aruco rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport Eigen3 OpenCV cv_bridge tf2_ros)
+ament_target_dependencies(aruco rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport Eigen3 OpenCV cv_bridge tf2_ros webots_spot_msgs)
 rclcpp_components_register_node(aruco
 PLUGIN "world_info::DetectAruco"
 EXECUTABLE aruco_node)
@@ -59,32 +60,28 @@ EXECUTABLE rs_depth_node)
 
 add_library(hazmat SHARED src/hazmat.cpp)
 ament_target_dependencies(hazmat rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport OpenCV cv_bridge tf2_ros)
-target_link_libraries(hazmat $ENV{INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so)
-target_include_directories(hazmat PUBLIC $ENV{INTEL_OPENVINO_DIR}/runtime/include $ENV{INTEL_OPENVINO_DIR}/runtime/include/ie)
+target_link_libraries(hazmat openvino::runtime)
 rclcpp_components_register_node(hazmat
 PLUGIN "world_info::DetectHazmat"
 EXECUTABLE hazmat_node)
 
 add_library(babyface SHARED src/babyface.cpp)
 ament_target_dependencies(babyface rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport OpenCV cv_bridge tf2_ros)
-target_link_libraries(babyface $ENV{INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so)
-target_include_directories(babyface PUBLIC $ENV{INTEL_OPENVINO_DIR}/runtime/include $ENV{INTEL_OPENVINO_DIR}/runtime/include/ie)
+target_link_libraries(babyface openvino::runtime)
 rclcpp_components_register_node(babyface
 PLUGIN "world_info::DetectBabyface"
 EXECUTABLE babyface_node)
 
 add_library(firenet SHARED src/firenet.cpp)
 ament_target_dependencies(firenet rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport OpenCV cv_bridge)
-target_link_libraries(firenet $ENV{INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so)
-target_include_directories(firenet PUBLIC $ENV{INTEL_OPENVINO_DIR}/runtime/include $ENV{INTEL_OPENVINO_DIR}/runtime/include/ie)
+target_link_libraries(firenet openvino::runtime)
 rclcpp_components_register_node(firenet
 PLUGIN "world_info::DetectFirenet"
 EXECUTABLE firenet_node)
 
 add_library(door_seg SHARED src/door_seg.cpp)
 ament_target_dependencies(door_seg rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport OpenCV cv_bridge)
-target_link_libraries(door_seg $ENV{INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so)
-target_include_directories(door_seg PUBLIC $ENV{INTEL_OPENVINO_DIR}/runtime/include $ENV{INTEL_OPENVINO_DIR}/runtime/include/ie)
+target_link_libraries(door_seg openvino::runtime)
 rclcpp_components_register_node(door_seg
 PLUGIN "world_info::DetectDoorSeg"
 EXECUTABLE door_seg_node)
@@ -96,7 +93,6 @@ install(DIRECTORY weights
   DESTINATION share/${PROJECT_NAME})
 
 install(TARGETS
-  qrcode
   aruco
   babyface
   firenet
@@ -111,6 +107,8 @@ install(TARGETS
   world_info
   object_detection_yolov5
   map_vision
+  tf2_object_detection_yolov5
+  qrcode
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()

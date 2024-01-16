@@ -11,26 +11,21 @@
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <image_transport/image_transport.hpp>
 #include <cv_bridge/cv_bridge.h>
-#include <world_info_msgs/msg/world_info.hpp>
 #include <world_info_msgs/msg/bounding_box.hpp>
 #include <world_info_msgs/msg/bounding_box_array.hpp>
-#include <world_info_msgs/srv/get_median_depth_xyz.hpp>
 #include <tf2_ros/transform_broadcaster.h>
 #include <ament_index_cpp/get_package_share_directory.hpp>
 
 rcl_interfaces::msg::ParameterDescriptor
 descr(const std::string &description, const bool &read_only = false)
 {
-    rcl_interfaces::msg::ParameterDescriptor descr;
+  rcl_interfaces::msg::ParameterDescriptor descr;
 
-    descr.description = description;
-    descr.read_only = read_only;
+  descr.description = description;
+  descr.read_only = read_only;
 
-    return descr;
+  return descr;
 }
-
-using GetMedianDepthXYZ = world_info_msgs::srv::GetMedianDepthXYZ;
-using ServiceResponseFuture = rclcpp::Client<GetMedianDepthXYZ>::SharedFuture;
 
 struct Detection
 {
@@ -66,19 +61,23 @@ Resize resize_and_pad(cv::Mat &img, cv::Size new_shape)
 
 class DetectObject: public rclcpp::Node
 {
-public: 
-  explicit DetectObject(const std::string& model_name, const std::string& image_topic, const rclcpp::NodeOptions &options = rclcpp::NodeOptions())
+public:
+  explicit DetectObject(const std::string& model_name, const std::string& image_topic, const std::string& depth_topic, const std::string& camera_frame_id_, const rclcpp::NodeOptions &options = rclcpp::NodeOptions())
   : Node(model_name + "_object_detection", options),
     sub_cam(image_transport::create_subscription(this, image_topic,
       std::bind(&DetectObject::onCamera, this, std::placeholders::_1),
-      declare_parameter("image_transport", "raw", descr( {}, true)), rmw_qos_profile_sensor_data))
+      declare_parameter("image_transport", "raw", descr( {}, true)), rmw_qos_profile_sensor_data)),
+    model_name_(model_name),
+    image_topic_(image_topic),
+    depth_topic_(depth_topic)
   {
-    // Initialize TransformBroadcaster
-    tfb_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
-
     // Create WorldInfo publisher
-    world_info_pub_ = create_publisher<world_info_msgs::msg::WorldInfo>("/world_info_sub", 1);
-    bounding_box_pub_ = create_publisher<world_info_msgs::msg::BoundingBoxArray>(image_topic + "/bb", 1);
+    bounding_box_pub_ = create_publisher<world_info_msgs::msg::BoundingBoxArray>(image_topic_ + "/bb", 1);
+
+    if (depth_topic_ != "")
+    {
+      bounding_box_depth_pub_ = create_publisher<world_info_msgs::msg::BoundingBoxArray>(depth_topic_ + "/bb", 1);
+    }
 
     SCORE_THRESHOLD = 0.2;
     NMS_THRESHOLD = 0.4;
@@ -87,11 +86,11 @@ public:
     if (!has_parameter("confidence_threshold")) declare_parameter("confidence_threshold", CONFIDENCE_THRESHOLD);
     get_parameter("confidence_threshold", CONFIDENCE_THRESHOLD);
 
-    inference_mode = "CPU";
+    inference_mode = "GPU";
     if (!has_parameter("inference_mode")) declare_parameter("inference_mode", inference_mode);
     get_parameter("inference_mode", inference_mode);
 
-    camera_frame_id = "";
+    camera_frame_id = camera_frame_id_;
     if (!has_parameter("camera_frame_id")) declare_parameter("camera_frame_id", camera_frame_id);
     get_parameter("camera_frame_id", camera_frame_id);
     
@@ -99,7 +98,7 @@ public:
 
     try {
       // Open the YAML file
-      std::ifstream fin(package_share_directory + "/weights/" + model_name + ".yaml");
+      std::ifstream fin(package_share_directory + "/weights/" + model_name_ + ".yaml");
 
       // Load the YAML document
       YAML::Node doc = YAML::Load(fin);
@@ -118,22 +117,8 @@ public:
       rclcpp::shutdown();
     }
 
-    model = core.read_model(package_share_directory + "/weights/" + model_name + ".onnx");
-
-    pub_tf2 = false;
-    if (!has_parameter("pub_tf2")) declare_parameter("pub_tf2", pub_tf2);
-    get_parameter("pub_tf2", pub_tf2);
-
-    if (pub_tf2) {
-      median_xyz_client_ = create_client<GetMedianDepthXYZ>("get_median_depth_xyz");
-      while (!median_xyz_client_->wait_for_service(std::chrono::seconds(1))) {
-        if (!rclcpp::ok()) {
-          RCLCPP_ERROR(get_logger(), "Interrupted while waiting for the service. Exiting.");
-          return;
-        }
-        RCLCPP_INFO(get_logger(), "service from rs_depth not available, waiting again...");
-      }
-    }
+    core.set_property("CPU", ov::affinity(ov::Affinity::NONE));
+    model = core.read_model(package_share_directory + "/weights/" + model_name_ + ".onnx");
   }
 
 private:
@@ -199,34 +184,34 @@ private:
 
       for (int i = 0; i < output_shape[1]; i++)
       {
-          float *detection = &detections[i *output_shape[2]];
+        float *detection = &detections[i *output_shape[2]];
 
-          float confidence = detection[4];
-          if (confidence >= CONFIDENCE_THRESHOLD)
+        float confidence = detection[4];
+        if (confidence >= CONFIDENCE_THRESHOLD)
+        {
+          float *classes_scores = &detection[5];
+          cv::Mat scores(1, output_shape[2] - 5, CV_32FC1, classes_scores);
+          cv::Point class_id;
+          double max_class_score;
+          cv::minMaxLoc(scores, 0, &max_class_score, 0, &class_id);
+
+          if (max_class_score>SCORE_THRESHOLD)
           {
-              float *classes_scores = &detection[5];
-              cv::Mat scores(1, output_shape[2] - 5, CV_32FC1, classes_scores);
-              cv::Point class_id;
-              double max_class_score;
-              cv::minMaxLoc(scores, 0, &max_class_score, 0, &class_id);
+            confidences.push_back(confidence);
 
-              if (max_class_score>SCORE_THRESHOLD)
-              {
-                  confidences.push_back(confidence);
+            class_ids.push_back(class_id.x);
 
-                  class_ids.push_back(class_id.x);
+            float x = detection[0];
+            float y = detection[1];
+            float w = detection[2];
+            float h = detection[3];
 
-                  float x = detection[0];
-                  float y = detection[1];
-                  float w = detection[2];
-                  float h = detection[3];
+            float xmin = x - (w / 2);
+            float ymin = y - (h / 2);
 
-                  float xmin = x - (w / 2);
-                  float ymin = y - (h / 2);
-
-                  boxes.push_back(cv::Rect(xmin, ymin, w, h));
-              }
+            boxes.push_back(cv::Rect(xmin, ymin, w, h));
           }
+        }
       }
 
       std::vector<int> nms_result;
@@ -234,16 +219,16 @@ private:
       std::vector<Detection> output;
       for (int i = 0; i < nms_result.size(); i++)
       {
-          Detection result;
-          int idx = nms_result[i];
-          result.class_id = class_ids[idx];
-          result.confidence = confidences[idx];
-          result.box = boxes[idx];
-          output.push_back(result);
+        Detection result;
+        int idx = nms_result[i];
+        result.class_id = class_ids[idx];
+        result.confidence = confidences[idx];
+        result.box = boxes[idx];
+        output.push_back(result);
       }
 
       world_info_msgs::msg::BoundingBoxArray bb_array_msg;
-      bb_array_msg.type = model_name;
+      bb_array_msg.type = model_name_;
       bool found_object = false;
 
       // Print results and publish Figure with detections
@@ -273,55 +258,16 @@ private:
         float xmax = std::min(img.size().width - 1, box.x + box.width);
         float ymax = std::min(img.size().height - 1, box.y + box.height);
 
-        auto request = std::make_shared<GetMedianDepthXYZ::Request>();
-        request->header = image_rect->header;
-        request->x = {box.x, xmax};
-        request->y = {box.y, ymax};
-
         cv::rectangle(img, cv::Point(box.x, box.y), cv::Point(xmax, ymax), cv::Scalar(0, 255, 0), 3);
         cv::putText(img, class_names[classId], cv::Point(box.x, box.y - 5), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
-
-        if (pub_tf2)
-        {
-          auto response_received_callback = [this,image_rect,classId](ServiceResponseFuture future) {
-            auto result = future.get();
-            if (std::isnan(result.get()->x) || std::isnan(result.get()->y) || std::isnan(result.get()->z))
-                return;
-            if (std::isinf(result.get()->x) || std::isinf(result.get()->y) || std::isinf(result.get()->z))
-                return;
-            if (result.get()->x == 0 & result.get()->y == 0 & result.get()->z == 0)
-                return;
-
-            geometry_msgs::msg::TransformStamped tf_msg;
-            tf_msg.header.stamp = image_rect->header.stamp;
-            tf_msg.header.frame_id = camera_frame_id == "" ? image_rect->header.frame_id : camera_frame_id;
-
-            // Set the transform message fields
-            tf_msg.child_frame_id = class_names[classId];
-            tf_msg.transform.translation.x = result.get()->z;
-            tf_msg.transform.translation.y = -result.get()->x;
-            tf_msg.transform.translation.z = -result.get()->y;
-
-            // Publish the transform message
-            tfb_->sendTransform(tf_msg);
-
-            // Publish the QR code poses
-            world_info_msgs::msg::WorldInfo world_info_msg;
-
-            world_info_msg.header.stamp = image_rect->header.stamp;
-            world_info_msg.num = class_names[classId];
-            world_info_msg.pose.position.x = tf_msg.transform.translation.x;
-            world_info_msg.pose.position.y = tf_msg.transform.translation.y;
-            world_info_msg.pose.position.z = tf_msg.transform.translation.z;
-            world_info_msg.type = model_name;
-
-            // Publish the WorldInfo message
-            world_info_pub_->publish(world_info_msg);
-          };
-          auto future_result = median_xyz_client_->async_send_request(request, response_received_callback);
-        }
       }
+      bb_array_msg.header.stamp = image_rect->header.stamp;
+      bb_array_msg.header.frame_id = camera_frame_id == "" ? image_rect->header.frame_id : camera_frame_id;
       bounding_box_pub_->publish(bb_array_msg);
+      if (depth_topic_ != "")
+      {
+        bounding_box_depth_pub_->publish(bb_array_msg);
+      }
     }
     catch (cv::Exception &e) {
         RCLCPP_ERROR(get_logger(), "cv_bridge exception: %s", e.what());
@@ -336,40 +282,53 @@ private:
   const image_transport::Subscriber sub_cam;
   std::vector<std::string> class_names;
 
-  std::unique_ptr<tf2_ros::TransformBroadcaster> tfb_;
-  rclcpp::Publisher<world_info_msgs::msg::WorldInfo>::SharedPtr world_info_pub_;
   rclcpp::Publisher<world_info_msgs::msg::BoundingBoxArray>::SharedPtr bounding_box_pub_;
-  rclcpp::Client<GetMedianDepthXYZ>::SharedPtr median_xyz_client_;
+  rclcpp::Publisher<world_info_msgs::msg::BoundingBoxArray>::SharedPtr bounding_box_depth_pub_;
 
   float SCORE_THRESHOLD;
   float NMS_THRESHOLD;
   float CONFIDENCE_THRESHOLD;
-  std::string inference_mode, model_name, camera_frame_id;
-  bool pub_tf2;
+  std::string inference_mode, model_name_, camera_frame_id;
   bool first_run = true;
-  std::string image_topic;
+  std::string image_topic_, depth_topic_;
 };
 
 int main(int argc, char **argv)
 {
   rclcpp::init(argc, argv);
 
-  std::string model_name;
-  std::string image_topic;
+  std::string model_name = "";
+  std::string image_topic = "";
+  std::string depth_topic = "";
+  std::string camera_frame_id = "";
 
   if (argc <= 2) // Insufficient arguments
   {
-    RCLCPP_ERROR(rclcpp::get_logger("object_detection"), "Provide a model name and the image topic name.");
-    rclcpp::shutdown();
-    return 0;
+    std::cerr << "Error: Provide a model name and the image topic name. If a 3rd argument of depth image is provided, then run tf2_object_detection_yolov5 as well\n";
+    return 1;
   }
   else
   {
+    // Read the entire input as model_name
     model_name = argv[1];
+
+    // Read the second argument as image_topic
     image_topic = argv[2];
+
+    // Check if the third argument exists and assign it to depth_topic
+    if (argc >= 4)
+    {
+      depth_topic = argv[3];
+      camera_frame_id = argv[4];
+    }
   }
 
-  rclcpp::spin(std::make_shared<DetectObject>(model_name, image_topic));
+  std::cout << "Model Name: " << model_name << std::endl;
+  std::cout << "Image Topic: " << image_topic << std::endl;
+  std::cout << "Depth Topic: " << depth_topic << std::endl;
+  std::cout << "Camera frame id: " << camera_frame_id << std::endl;
+
+  rclcpp::spin(std::make_shared<DetectObject>(model_name, image_topic, depth_topic, camera_frame_id));
   rclcpp::shutdown();
   return 0;
 }

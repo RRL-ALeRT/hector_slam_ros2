@@ -40,7 +40,7 @@ def generate_launch_description():
                         executable='battery_screen',
                         output='screen',
                     )
-    spot_plus.add_action(battery_screen)
+    # spot_plus.add_action(battery_screen)
 
     map_vision_node = launch_ros.actions.Node(
         package='spot_driver_plus',
@@ -48,13 +48,13 @@ def generate_launch_description():
         output='screen',
     )
     spot_plus.add_action(map_vision_node)
-    #map_vision_tf2 = launch_ros.actions.Node(
-    #    package='tf2_ros',
-    #    executable='static_transform_publisher',
-    #    output='screen',
-    #    arguments=['0.0', '0.0', '0.0', '0.0', '0.0', '0.0', '1.0', 'map', 'vision'],
-    #)
-    #spot_plus.add_action(map_vision_tf2)
+
+    goal_pose_to_trajectory = launch_ros.actions.Node(
+       package='spot_driver_plus',
+       executable='goal_pose_to_trajectory.py',
+       output='screen',
+    )
+    spot_plus.add_action(goal_pose_to_trajectory)
 
     back_image = ExecuteProcess(
                         cmd=['ros2', 'run', 'spot_cpp_ros2', 'get_image', 'back'],

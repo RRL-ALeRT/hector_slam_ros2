@@ -15,6 +15,7 @@
 
 using Empty = std_srvs::srv::Empty;
 using namespace std::placeholders;
+using namespace std::chrono_literals;
 
 void add_to_mean(geometry_msgs::msg::Pose& mean, const geometry_msgs::msg::Pose newPose, int& numPoses)
 {
@@ -78,8 +79,17 @@ public:
 
     reset_world = create_service<Empty>("reset_world_info", std::bind(&WorldInfo::reset_world_cb, this, _1, _2, _3));
 
+    // Call on_timer function every second
+    timer_ = create_wall_timer(1s, std::bind(&WorldInfo::on_timer, this));
+
     tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+  }
+
+  void on_timer()
+  {
+    if (wi_vector.array.size() > 0)
+      wi_pub->publish(wi_vector);
   }
 
   void reset_world_cb(
@@ -217,6 +227,7 @@ public:
   rclcpp::Subscription<world_info_msgs::msg::WorldInfo>::SharedPtr sub;
   rclcpp::Publisher<world_info_msgs::msg::WorldInfoArray>::SharedPtr wi_pub;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_pub;
+  rclcpp::TimerBase::SharedPtr timer_{nullptr};
 
   rclcpp::Service<Empty>::SharedPtr reset_world;
 
