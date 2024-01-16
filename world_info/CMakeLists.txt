@@ -26,13 +26,9 @@ find_package(image_transport REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(hector_nav_msgs REQUIRED)
-find_package(webots_spot_msgs REQUIRED)
 
 add_executable(world_info src/world_info.cpp)
 ament_target_dependencies(world_info rclcpp world_info_msgs tf2_ros tf2_geometry_msgs std_srvs hector_nav_msgs)
-
-add_executable(map_vision src/map_vision.cpp)
-ament_target_dependencies(map_vision rclcpp tf2 tf2_ros geometry_msgs visualization_msgs std_srvs hector_nav_msgs)
 
 add_executable(object_detection_yolov5 src/object_detection_yolov5.cpp)
 target_link_libraries(object_detection_yolov5 openvino::runtime ${YAML_CPP_LIBRARIES})
@@ -47,16 +43,10 @@ ament_target_dependencies(qrcode rclcpp rclcpp_components world_info_msgs sensor
 target_link_libraries(qrcode ${ZBAR_LIBRARIES} zbar)
 
 add_library(aruco SHARED src/aruco.cpp)
-ament_target_dependencies(aruco rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport Eigen3 OpenCV cv_bridge tf2_ros webots_spot_msgs)
+ament_target_dependencies(aruco rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport Eigen3 OpenCV cv_bridge tf2_ros)
 rclcpp_components_register_node(aruco
 PLUGIN "world_info::DetectAruco"
 EXECUTABLE aruco_node)
-
-add_library(rs_depth SHARED src/rs_depth.cpp)
-ament_target_dependencies(rs_depth rclcpp rclcpp_components sensor_msgs image_transport OpenCV cv_bridge world_info_msgs)
-rclcpp_components_register_node(rs_depth
-PLUGIN "world_info::RSDepth"
-EXECUTABLE rs_depth_node)
 
 add_library(hazmat SHARED src/hazmat.cpp)
 ament_target_dependencies(hazmat rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport OpenCV cv_bridge tf2_ros)
@@ -97,7 +87,6 @@ install(TARGETS
   babyface
   firenet
   door_seg
-  rs_depth
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
@@ -106,7 +95,6 @@ install(TARGETS
 install(TARGETS
   world_info
   object_detection_yolov5
-  map_vision
   tf2_object_detection_yolov5
   qrcode
   DESTINATION lib/${PROJECT_NAME})
