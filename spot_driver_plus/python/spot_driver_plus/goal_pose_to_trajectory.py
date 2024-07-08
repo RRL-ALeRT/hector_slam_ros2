@@ -22,6 +22,25 @@ from tf2_geometry_msgs import do_transform_pose
 
 from rclpy.duration import Duration
 
+from spot_msgs.srv import SetVelocity
+from geometry_msgs.msg import Twist, Vector3
+
+
+class SetMaxVelocityClient(Node):
+    def __init__(self):
+        super().__init__('set_max_velocity_client')
+        self.cli = self.create_client(SetVelocity, '/max_velocity')
+        while not self.cli.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('service not available, waiting again...')
+        self.req = SetVelocity.Request()
+
+    def send_request(self, linear_x, linear_y, angular_z):
+        self.req.velocity_limit = Twist(
+            linear=Vector3(x=linear_x, y=linear_y, z=0.0),
+            angular=Vector3(x=0.0, y=0.0, z=angular_z)
+        )
+        self.future = self.cli.call_async(self.req)
+
 
 class GPPTrajectory(Node):
     def __init__(self):
@@ -87,6 +106,12 @@ class GPPTrajectory(Node):
 
 def main():
     rclpy.init()
+
+    max_speed_setter = SetMaxVelocityClient()
+    linear_x = 0.5
+    linear_y = 0.5
+    angular_z = 1.0
+    max_speed_setter.send_request(linear_x, linear_y, angular_z)
 
     gpp_action_server = GPPTrajectory()
 
