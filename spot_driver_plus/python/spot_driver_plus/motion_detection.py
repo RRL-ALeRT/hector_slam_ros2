@@ -50,7 +50,7 @@ class MotionDetectorAdaptative(Node):
 
     def onChange(self, val):  # callback when the user changes the detection threshold
         self.threshold = val
-        self.get_logger().info(f"Threshold set to: {val}")
+        self.get_logger().debug(f"Threshold set to: {val}")
 
     def listener_callback(self, data):
         frame = self.bridge.imgmsg_to_cv2(data, 'bgr8')
@@ -68,7 +68,7 @@ class MotionDetectorAdaptative(Node):
         if self.somethingHasMoved():
             self.trigger_time = instant  # Update the trigger_time
             if instant > time.time() + 10:  # Wait 5 seconds after the webcam start for luminosity adjusting etc.
-                self.get_logger().info("Something is moving!")
+                self.get_logger().debug("Something is moving!")
 
         if self.show:
             cv2.drawContours(current_frame, self.currentcontours, -1, (0, 0, 255), 2)
@@ -121,7 +121,7 @@ class MotionDetectorAdaptative(Node):
         avg = (self.currentsurface * 100) / self.surface  # Calculate the average of contour area on the total size
         self.currentsurface = 0  # Put back the current surface to 0
 
-        self.get_logger().info(f"Detected average motion: {avg:.2f}%, threshold: {self.threshold}")
+        self.get_logger().debug(f"Detected average motion: {avg:.2f}%, threshold: {self.threshold}")
         return avg > self.threshold
 
 
