@@ -113,17 +113,21 @@ class GeotiffSaver
 
     void worldInfoCallback(const world_info_msgs::msg::WorldInfoArray::SharedPtr array)
     {
+      if (wi_array.array.size() > 0) return;
+      
       wi_array = *array;
     };
 
     void map1mCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr map_msg)
     {
+      if (map_1m_loaded) return;
       map_1m = *map_msg;
       map_1m_loaded = true;
     };
 
     void map2mCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr map_msg)
     {
+      if (map_2m_loaded) return;
       map_2m = *map_msg;
       map_2m_loaded = true;
     };
