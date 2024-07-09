@@ -16,7 +16,6 @@ def delayed_node_action(package, executable, namespace, parameters, respawn=True
                 namespace=namespace,
                 parameters=parameters,
                 respawn=respawn,
-                remappings=[(f"/{namespace}/depth/color/points", "/velodyne_points")]
             )
         ]
     )
@@ -64,7 +63,7 @@ def generate_launch_description():
         "pointcloud.enable": True,
         "publish_tf": False
     }]
-    
+
     rs_front_action = delayed_node_action(
         package="realsense2_camera",
         executable="realsense2_camera_node",
@@ -101,21 +100,21 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         output='screen',
-        arguments=['-0.111', '0.1156', '0.139', '0.001', '-0.2311465', '0.6462265', '0.7144206', 'body', 'rs_left_color_optical_frame'],
+        arguments=['-0.1315', '0.115', '0.139', '-0.5', '0.0', '0.0', ' 0.8660254 ', 'body', 'rs_left_color_optical_frame'],
     )
 
     tf_rs_right = launch_ros.actions.Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         output='screen',
-        arguments=['-0.111', '-0.1156', '0.139', '0.1830127', '0.1830127', '0.6830127', '-0.6830127', 'body', 'rs_right_color_optical_frame'],
+        arguments=['-0.155', '-0.115', '0.139', '0.0', '-0.5', '0.8660254', '0.0', 'body', 'rs_right_color_optical_frame'],
     )
 
     return launch.LaunchDescription([
         rs_front_action,
-        # rs_left_action,
-        # rs_right_action,
+        rs_left_action,
+        rs_right_action,
         tf_rs_front,
-        # tf_rs_left,
-        # tf_rs_right,
+        tf_rs_left,
+        tf_rs_right,
     ])
