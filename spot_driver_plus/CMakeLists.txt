@@ -63,6 +63,9 @@ install(DIRECTORY launch config urdf
 # Python nodes (at least one cpp node should be available to see these)
 set(PYTHON_NODES
   get_pcl.py
+  goal_pose_to_trajectory.py
+  spot_estop.py
+  motion_detection.py
 )
 install(DIRECTORY python/${PROJECT_NAME}
   DESTINATION lib
