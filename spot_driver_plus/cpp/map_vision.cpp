@@ -67,6 +67,8 @@ public:
 
     if (!has_parameter("odom_frame")) declare_parameter("odom_frame", odom_frame);
     get_parameter("odom_frame", odom_frame);
+
+    transform_timer_ = create_wall_timer(500ms, std::bind(&FrameListener::query_transform, this));
   }
 
 private:
@@ -116,7 +118,7 @@ private:
 
     t.transform.translation.x = last_pose.position.x;
     t.transform.translation.y = last_pose.position.y;
-    t.transform.translation.z = last_pose.position.z - 0.094;
+    t.transform.translation.z = last_pose.position.z - ground_plane_vertical_distance;
 
     auto q = tf2::Quaternion{
       last_pose.orientation.x,
@@ -185,12 +187,25 @@ private:
     travelled_path_pub->publish(path_marker);
   }
 
+  void query_transform()
+  {
+    geometry_msgs::msg::TransformStamped transform;
+    try {
+      transform = tf_buffer_->lookupTransform("gpe", "body", tf2::TimePointZero);
+      ground_plane_vertical_distance = transform.transform.translation.z;
+    } catch (tf2::TransformException &ex) {
+      RCLCPP_WARN_ONCE(this->get_logger(), "Could not transform 'gpe' to 'body': %s", ex.what());
+    }
+  }
+
   geometry_msgs::msg::TransformStamped map_vision_tf2;
   std::string odom_frame = "vision";
   bool map_frame_published = false;
+  float ground_plane_vertical_distance = 0.092;
 
   rclcpp::TimerBase::SharedPtr map_frame_timer_{nullptr};
   rclcpp::TimerBase::SharedPtr path_timer_{nullptr};
+  rclcpp::TimerBase::SharedPtr transform_timer_{nullptr};
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::unique_ptr<tf2_ros::StaticTransformBroadcaster> tf_static_broadcaster_;
