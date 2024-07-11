@@ -66,6 +66,7 @@ set(PYTHON_NODES
   goal_pose_to_trajectory.py
   spot_estop.py
   motion_detection.py
+  plan_3d_path.py
 )
 install(DIRECTORY python/${PROJECT_NAME}
   DESTINATION lib
