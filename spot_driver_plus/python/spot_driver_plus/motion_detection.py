@@ -84,8 +84,8 @@ class MotionDetectorAdaptative(Node):
                 draw_box = BoundingBox()
                 x, y, w, h = cv2.boundingRect(contour)
 
-                draw_box.cx = float(x)
-                draw_box.cy = float(y)
+                draw_box.cx = float(x+w/2)
+                draw_box.cy = float(y+h/2)
                 draw_box.name = "motion"
                 draw_box.height = float(h)
                 draw_box.width = float(w)

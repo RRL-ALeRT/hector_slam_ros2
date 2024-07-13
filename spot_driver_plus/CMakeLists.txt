@@ -67,6 +67,7 @@ set(PYTHON_NODES
   spot_estop.py
   motion_detection.py
   plan_3d_path.py
+  rrl_qreader.py
 )
 install(DIRECTORY python/${PROJECT_NAME}
   DESTINATION lib

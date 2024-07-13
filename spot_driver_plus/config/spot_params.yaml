@@ -11,12 +11,12 @@
     auto_stand: False
     deadzone: 0.05
     estop_timeout: 10.0
-    start_estop: True
+    start_estop: False
     preferred_odom_frame: "vision" # pass either odom/vision. This frame will become the parent of body in tf2 tree and will be used in odometry topic. https://dev.bostondynamics.com/docs/concepts/geometry_and_frames.html?highlight=frame#frames-in-the-spot-robot-world for more info.
     async_tasks_rate: 20.0
     cmd_duration: 0.4 # Increase if spot stutters while walking
     initialize_spot_cam: False
     rgb_cameras: False
     publish_rgb: True
-    publish_depth: False
+    publish_depth: True
     publish_depth_registered: False
