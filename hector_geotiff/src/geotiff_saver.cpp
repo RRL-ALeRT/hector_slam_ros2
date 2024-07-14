@@ -83,12 +83,16 @@ class GeotiffSaver
     //////////Path_queue_ !!!!!!!!!!!
     void path_queue_async_request()
     {
-    if (!path_service_client_->wait_for_service(1s)) {
-      if (!rclcpp::ok()) {
-        RCLCPP_ERROR(node_->get_logger(), "Interrupted while waiting for the service. Exiting.");
-        return;
+    for (long unsigned int i=5; i>0; i++) {
+      if (!path_service_client_->wait_for_service(1s))
+      {
+        if (!rclcpp::ok()) {
+          RCLCPP_ERROR(node_->get_logger(), "Interrupted while waiting for the service. Exiting.");
+          return;
+        }
+        RCLCPP_WARN_STREAM(node_->get_logger(), "path service not available, retrying " << i << " more times");
       }
-      RCLCPP_ERROR(node_->get_logger(), "path service not available, ignoring command");
+      else break;
     }
     auto request = std::make_shared<GetRT::Request>();
 
