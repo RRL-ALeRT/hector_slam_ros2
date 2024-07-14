@@ -21,8 +21,8 @@ INCREASED_MAP_RESOLUTION = 0.05
 SPEED = 0.4
 LOOKAHEAD_DISTANCE = 0.4
 TARGET_ERROR = 0.2
-EXPANSION_SIZE = 0
-Z_THRESHOLD = 0.24
+EXPANSION_SIZE = 2
+Z_THRESHOLD = 0.25
 
 
 def costmap(map_data: OccupancyGrid, expansion_size) -> OccupancyGrid:
