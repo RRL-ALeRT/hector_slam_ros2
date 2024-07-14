@@ -81,7 +81,7 @@ public:
 
     SCORE_THRESHOLD = 0.2;
     NMS_THRESHOLD = 0.4;
-    CONFIDENCE_THRESHOLD = 0.8;
+    CONFIDENCE_THRESHOLD = 0.85;
 
     if (!has_parameter("confidence_threshold")) declare_parameter("confidence_threshold", CONFIDENCE_THRESHOLD);
     get_parameter("confidence_threshold", CONFIDENCE_THRESHOLD);

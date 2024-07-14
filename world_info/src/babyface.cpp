@@ -128,13 +128,13 @@ using ServiceResponseFuture = rclcpp::Client<GetMedianDepthXYZ>::SharedFuture;
             world_info_pub_ = create_publisher<world_info_msgs::msg::WorldInfo>("/world_info_sub", 1);
 
             median_xyz_client_ = create_client<GetMedianDepthXYZ>("get_median_depth_xyz");
-            while (!median_xyz_client_->wait_for_service(std::chrono::seconds(1))) {
-                if (!rclcpp::ok()) {
-                    RCLCPP_ERROR(get_logger(), "Interrupted while waiting for the service. Exiting.");
-                    return;
-                }
-                RCLCPP_INFO(get_logger(), "service from rs_depth not available, waiting again...");
-            }
+            // while (!median_xyz_client_->wait_for_service(std::chrono::seconds(1))) {
+            //     if (!rclcpp::ok()) {
+            //         RCLCPP_ERROR(get_logger(), "Interrupted while waiting for the service. Exiting.");
+            //         return;
+            //     }
+            //     RCLCPP_INFO(get_logger(), "service from rs_depth not available, waiting again...");
+            // }
 
             SCORE_THRESHOLD = 0.2;
             NMS_THRESHOLD = 0.4;
@@ -371,7 +371,7 @@ using ServiceResponseFuture = rclcpp::Client<GetMedianDepthXYZ>::SharedFuture;
                         // Publish the WorldInfo message
                         world_info_pub_->publish(world_info_msg);
                     };
-                    auto future_result = median_xyz_client_->async_send_request(request, response_received_callback);
+                    // auto future_result = median_xyz_client_->async_send_request(request, response_received_callback);
                 }
             }
             catch (cv_bridge::Exception &e)

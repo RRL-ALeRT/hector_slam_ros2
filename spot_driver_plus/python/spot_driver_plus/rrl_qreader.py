@@ -12,6 +12,7 @@ from qreader import QReader
 import cv2
 import numpy as np
 from world_info_msgs.msg import BoundingBox, BoundingBoxArray
+from copy import deepcopy
 
 IMAGE_TOPICS = {
     "rs_front_color_optical_frame": "/rs_front/color/image_raw",
@@ -28,16 +29,13 @@ DEPTH_IMAGE_TOPICS = {
 class QRCodeProcessor(Node):
     def __init__(self):
         super().__init__('qr_code_processor')
-        self.subscription = self.create_subscription(
-            Image,
-            "/rs_combined_color",
-            self.listener_callback,
-            1)
         
         self.bounding_box_pubs_dict = {}
         for frame_name, image_topic in IMAGE_TOPICS.items():
             self.bounding_box_pub = self.create_publisher(BoundingBoxArray, f'{image_topic}/bb', 1)
             self.bounding_box_pubs_dict[frame_name] = self.bounding_box_pub
+
+            self.create_subscription(Image, image_topic, self.listener_callback, 1)
 
         self.depth_bounding_box_pubs_dict = {}
         for frame_name, depth_image_topic in DEPTH_IMAGE_TOPICS.items():
@@ -48,7 +46,7 @@ class QRCodeProcessor(Node):
         self.qreader = QReader()
 
     def listener_callback(self, msg):
-        cv_image = self.br.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        cv_image = deepcopy(self.br.imgmsg_to_cv2(msg, desired_encoding='bgr8'))
         rgb_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
         detections = self.qreader.detect_and_decode(rgb_image, return_detections=True)
 

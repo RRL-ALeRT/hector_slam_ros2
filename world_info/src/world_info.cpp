@@ -175,7 +175,7 @@ public:
     if (!tag_found)
     {
       PoseCount tag_dict;
-      tag_dict = PoseCount{*msg, 1, id_count, time_str, std::string("Spot"), std::string("T")}; // First time
+      tag_dict = PoseCount{*msg, 1, id_count, time_str, std::string("Spot"), std::string("A")}; // First time
       id_count++;
       tag_collection[tag_name].push_back(tag_dict);
     }

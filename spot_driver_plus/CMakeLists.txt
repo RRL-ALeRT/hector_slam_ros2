@@ -56,7 +56,7 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-install(DIRECTORY launch config urdf
+install(DIRECTORY launch config urdf yolov8n
   DESTINATION share/${PROJECT_NAME}
 )
 
