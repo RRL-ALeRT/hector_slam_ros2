@@ -481,12 +481,13 @@ void GeotiffWriter::drawObjectOfInterest( const Eigen::Vector2f &coords, const s
 
   if ( tmp.length() < 2 )
   {
+    map_draw_font_.setPixelSize( 2.5 * resolutionFactor );
     qPainter.setFont( map_draw_font_ );
   }
   else
   {
     QFont tmp_font( font_family_ );
-    tmp_font.setPixelSize( 3 * resolutionFactor );
+    tmp_font.setPixelSize( 2.5 * resolutionFactor );
     qPainter.setFont( tmp_font );
   }
 
@@ -495,6 +496,7 @@ void GeotiffWriter::drawObjectOfInterest( const Eigen::Vector2f &coords, const s
   qPainter.scale( -1.0, 1.0 );
 
   qPainter.drawText( shape_rect, Qt::AlignCenter, tmp );
+  map_draw_font_.setPixelSize( 6 * resolutionFactor );
 }
 
 void GeotiffWriter::drawPath( const Eigen::Vector3f &start, const std::vector<Eigen::Vector2f> &points, int color_r,
