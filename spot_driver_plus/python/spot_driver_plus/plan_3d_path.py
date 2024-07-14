@@ -180,25 +180,30 @@ def get_nearest_free_space(map_data, frontier):
 
     map_data_array = np.array(map_data.data).reshape((height, width))
 
-    search_radius = 10
+    search_radius = 10  # Adjust search radius as needed
 
     # Convert frontier point to map coordinates
     map_x, map_y = world_to_map_coords(map_data, frontier[0], frontier[1])
 
-    for i in range(-search_radius, search_radius + 1):
-        for j in range(-search_radius, search_radius + 1):
+    # Generate the sequence of i and j values
+    i_values = list(range(0, search_radius + 1)) + list(range(-1, -search_radius - 1, -1))
+    j_values = list(range(0, search_radius + 1)) + list(range(-1, -search_radius - 1, -1))
+
+    for i in i_values:
+        for j in j_values:
             x = map_x + i
             y = map_y + j
 
             # Check if the indices are within the bounds of the map
             if 0 <= x < width and 0 <= y < height:
-                if map_data_array[y, x] == 0:  # Note the swapped indices for correct access
+                if map_data_array[y, x] == 0:
                     # Convert back to world coordinates
                     world_x, world_y = map_to_world_coords(map_data, x, y)
                     return [world_x, world_y], True
 
     # If no free space is found within the radius, return the original frontier
     return frontier, False
+
 
 def change_resolution(msg, old_z_values, new_resolution):
     original_resolution = msg.info.resolution
@@ -235,7 +240,7 @@ class PointCloudToGrid(Node):
         # Parameters
         self.declare_parameter('cloud_in_topic', '/navigation/octomap_point_cloud_centers')
         self.declare_parameter('grid_topic_name', '/two_d')
-        self.declare_parameter('cell_size', 0.2)
+        self.declare_parameter('cell_size', 0.1)
         self.declare_parameter('z_threshold', Z_THRESHOLD)
         self.declare_parameter('verbose', False)
 
@@ -327,12 +332,17 @@ class PointCloudToGrid(Node):
             return
 
         if not hasattr(self, "robot_position"):
+            self.get_logger().warn("Didn't receive robot position yet")
             return
 
         if not hasattr(self, "current_map"):
+            self.get_logger().warn("Didn't receive map yet")
             return
 
-        current_map, z_values = change_resolution(self.current_map, self.z_values, INCREASED_MAP_RESOLUTION)
+        # current_map, z_values = change_resolution(self.current_map, self.z_values, INCREASED_MAP_RESOLUTION)
+        # INCREASED_MAP_RESOLUTION is same as current map resolution for now
+        # Todo: fix Index Error
+        current_map, z_values = self.current_map, self.z_values
         current_map = costmap(current_map, EXPANSION_SIZE)
 
         goal_coordinates = [msg.pose.pose.position.x, msg.pose.pose.position.y]
