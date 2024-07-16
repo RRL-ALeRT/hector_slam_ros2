@@ -68,6 +68,7 @@ set(PYTHON_NODES
   motion_detection.py
   plan_3d_path.py
   rrl_qreader.py
+  olive_magnetic.py
 )
 install(DIRECTORY python/${PROJECT_NAME}
   DESTINATION lib
