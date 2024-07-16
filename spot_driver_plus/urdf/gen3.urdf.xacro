@@ -23,7 +23,7 @@
   <xacro:arg name="use_fake_hardware" default="false" />
   <xacro:arg name="fake_sensor_commands" default="false" />
   <xacro:arg name="use_internal_bus_gripper_comm" default="true" />
-  <xacro:arg name="use_external_cable" default="false" />
+  <xacro:arg name="use_external_cable" default="true" />
 
   <xacro:include filename="$(find kortex_description)/robots/kortex_robot.xacro" />
 
