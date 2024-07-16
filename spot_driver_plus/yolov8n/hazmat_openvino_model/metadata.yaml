@@ -1,6 +1,6 @@
-description: Ultralytics YOLOv8n model trained on dataset.yaml
+description: Ultralytics hazmat model trained on dataset.yaml
 author: Ultralytics
-date: '2024-07-13T22:56:23.160819'
+date: '2024-07-16T09:30:29.520513'
 version: 8.2.55
 license: AGPL-3.0 License (https://ultralytics.com/license)
 docs: https://docs.ultralytics.com
