@@ -48,10 +48,10 @@ class ObjectDetector(Node):
 
     def listener_callback(self, msg):
         cv_image = deepcopy(self.br.imgmsg_to_cv2(msg, desired_encoding='bgr8'))
-        rgb_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
+        # rgb_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
 
         # Predict with YOLO model
-        results = self.yolo.predict(rgb_image, verbose=False)
+        results = self.yolo.predict(cv_image, verbose=False)
 
         bb_array_msg = BoundingBoxArray()
         bb_array_msg.header = msg.header

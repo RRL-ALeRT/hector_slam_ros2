@@ -69,6 +69,8 @@ set(PYTHON_NODES
   plan_3d_path.py
   rrl_qreader.py
   olive_magnetic.py
+  arduino_lights.py
+  kinova_yolov8_openvino.py
 )
 install(DIRECTORY python/${PROJECT_NAME}
   DESTINATION lib

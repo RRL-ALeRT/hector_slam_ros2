@@ -32,9 +32,7 @@ class MagnetometerNode(Node):
         
         self.deck_pub = self.create_publisher(OverlayText, '/deck_text', 1)
 
-        # Publisher for visualization markers
-        self.marker_publisher_ = self.create_publisher(Marker, 'visualization_marker', 10)
-        self.callback_timer = self.create_timer(0.5, self.timer_callback)
+        self.callback_timer = self.create_timer(1, self.timer_callback)
 
         self.heading = 0.0  # Initialize heading
         self.heading_deg = 0.0  # Initialize heading in degrees
@@ -110,8 +108,8 @@ class MagnetometerNode(Node):
             return
 
         magnitude = math.sqrt(self.bx**2 + self.by**2 + self.bz**2)
-        self.get_logger().info('Local Heading: {:.2f} deg, Local Direction: {}, Magnitude: {:.2f}'.format(self.local_heading_deg, self.local_direction, magnitude))
-        self.publish_marker()
+        # self.get_logger().info('Local Heading: {:.2f} deg, Local Direction: {}, Magnitude: {:.2f}'.format(self.local_heading_deg, self.local_direction, magnitude))
+        # self.publish_marker()
 
         deck_msg = OverlayText()
         deck_msg.horizontal_alignment = 0
@@ -127,7 +125,7 @@ class MagnetometerNode(Node):
 
         if self.local_direction == "":
             return
-        if magnitude < 60:
+        if magnitude < 70:
             self.deck_pub.publish(deck_msg)
             return
 
@@ -136,25 +134,6 @@ class MagnetometerNode(Node):
         elif "S" in self.local_direction:
             deck_msg.text = "South"
         self.deck_pub.publish(deck_msg)
-
-    def publish_marker(self):
-        marker = Marker()
-        marker.header.frame_id = "olive"
-        marker.header.stamp = self.get_clock().now().to_msg()
-        marker.ns = "heading"
-        marker.id = 0
-        marker.type = Marker.TEXT_VIEW_FACING
-        marker.action = Marker.ADD
-        marker.pose.position.x = 1.0
-        marker.pose.position.y = 1.0
-        marker.pose.position.z = 1.0
-        marker.scale.z = 0.5  
-        marker.color.r = 1.0
-        marker.color.g = 0.0
-        marker.color.b = 0.0
-        marker.color.a = 1.0  
-        marker.text = 'Heading: {:.2f} deg, Direction: {}'.format(self.local_heading_deg, self.local_direction)
-        self.marker_publisher_.publish(marker)
 
     def get_direction_name(self, heading_deg):
         self.directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]

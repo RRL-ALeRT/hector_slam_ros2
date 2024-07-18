@@ -28,20 +28,6 @@ def generate_launch_description():
     )
     spot_plus.add_action(child_launch)
 
-    pcl_combined = launch_ros.actions.Node(
-                        package='spot_driver_plus',
-                        executable='get_pcl.py',
-                        output='screen',
-                    )
-    #spot_plus.add_action(pcl_combined)
-
-    battery_screen = launch_ros.actions.Node(
-                        package='spot_driver_plus',
-                        executable='battery_screen',
-                        output='screen',
-                    )
-    # spot_plus.add_action(battery_screen)
-
     map_vision_node = launch_ros.actions.Node(
         package='spot_driver_plus',
         executable='map_vision',
@@ -56,10 +42,11 @@ def generate_launch_description():
     )
     spot_plus.add_action(goal_pose_to_trajectory)
 
-    back_image = ExecuteProcess(
-                        cmd=['ros2', 'run', 'spot_cpp_ros2', 'get_image', 'back'],
-                        output='screen'
-                    )
-    # spot_plus.add_action(back_image)
+    arduino_lights = launch_ros.actions.Node(
+       package='spot_driver_plus',
+       executable='arduino_lights.py',
+       output='screen',
+    )
+    spot_plus.add_action(arduino_lights)
 
     return spot_plus

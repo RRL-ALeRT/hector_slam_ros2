@@ -7,9 +7,9 @@ from nav_msgs.msg import OccupancyGrid
 from std_msgs.msg import Header
 from sensor_msgs_py import point_cloud2
 from geometry_msgs.msg import PoseWithCovarianceStamped
-from visualization_msgs.msg import Marker, MarkerArray
+from visualization_msgs.msg import Marker
 import tf2_ros
-from geometry_msgs.msg import PointStamped, Pose, Twist
+from geometry_msgs.msg import Pose, Twist
 from std_srvs.srv import SetBool
 
 from copy import deepcopy
@@ -21,8 +21,8 @@ INCREASED_MAP_RESOLUTION = 0.05
 SPEED = 0.4
 LOOKAHEAD_DISTANCE = 0.4
 TARGET_ERROR = 0.2
-EXPANSION_SIZE = 2
-Z_THRESHOLD = 0.25
+EXPANSION_SIZE = 3
+Z_THRESHOLD = 0.23
 
 
 def costmap(map_data: OccupancyGrid, expansion_size) -> OccupancyGrid:
@@ -238,7 +238,7 @@ class PointCloudToGrid(Node):
         super().__init__('pointcloud_to_grid_node')
 
         # Parameters
-        self.declare_parameter('cloud_in_topic', '/navigation/octomap_point_cloud_centers')
+        self.declare_parameter('cloud_in_topic', '/navigation/octomap_point_cloud_centers_filtered')
         self.declare_parameter('grid_topic_name', '/two_d')
         self.declare_parameter('cell_size', 0.1)
         self.declare_parameter('z_threshold', Z_THRESHOLD)
@@ -327,25 +327,11 @@ class PointCloudToGrid(Node):
         twist_command.angular.z = float(angular_velocity)
         self.twist_publisher.publish(twist_command)
 
-    def pose_cb(self, msg):
-        if self.in_motion:
-            return
-
-        if not hasattr(self, "robot_position"):
-            self.get_logger().warn("Didn't receive robot position yet")
-            return
-
-        if not hasattr(self, "current_map"):
-            self.get_logger().warn("Didn't receive map yet")
-            return
-
+    def find_path(self, expansion_size, goal_coordinates, current_map, z_values):
         # current_map, z_values = change_resolution(self.current_map, self.z_values, INCREASED_MAP_RESOLUTION)
         # INCREASED_MAP_RESOLUTION is same as current map resolution for now
         # Todo: fix Index Error
-        current_map, z_values = self.current_map, self.z_values
-        current_map = costmap(current_map, EXPANSION_SIZE)
-
-        goal_coordinates = [msg.pose.pose.position.x, msg.pose.pose.position.y]
+        current_map = costmap(current_map, expansion_size)
 
         nearest_free_cell, nearest_free_cell_found = get_nearest_free_space(current_map, goal_coordinates)
         if not nearest_free_cell_found:
@@ -358,11 +344,42 @@ class PointCloudToGrid(Node):
         )
 
         if not is_target_reachable:
-            self.get_logger().warn("Could not reach target")
+            return None, None
+        
+        return path, z_values
+
+    def pose_cb(self, msg):
+        if self.in_motion:
             return
 
+        if not hasattr(self, "robot_position"):
+            self.get_logger().warn("Didn't receive robot position yet")
+            return
+
+        if not hasattr(self, "current_map"):
+            self.get_logger().warn("Didn't receive map yet")
+            return
+        
+        goal_coordinates = [msg.pose.pose.position.x, msg.pose.pose.position.y]
+
+        expansion_size = EXPANSION_SIZE
+        while expansion_size >= 0:
+            current_map, z_values = deepcopy(self.current_map), deepcopy(self.z_values)
+            path, z_values = self.find_path(expansion_size, goal_coordinates, current_map, z_values)
+            if path is not None:
+                break
+            else:
+                self.get_logger().warn(f"Could not reach target with expansion size: {expansion_size}")
+            expansion_size -= 1
+
+        if path is None:
+            self.get_logger().warn("Could not reach target")
+            return
+        
+        self.get_logger().info("Path to the target found")
+
         path_marker = Marker()
-        path_marker.header = current_map.header
+        path_marker.header = self.current_map.header
         path_marker.type = Marker.LINE_STRIP
         path_marker.action = Marker.ADD
         path_marker.scale.x = 0.1  # Line width
@@ -376,9 +393,9 @@ class PointCloudToGrid(Node):
             pose = Pose()
 
             # Convert from grid coordinates (p[0], p[1]) to world coordinates
-            pose.position.x, pose.position.y = map_to_world_coords(current_map, p[0], p[1])
+            pose.position.x, pose.position.y = map_to_world_coords(self.current_map, p[0], p[1])
 
-            z_values = np.array(z_values).reshape(current_map.info.height, current_map.info.width)
+            z_values = np.array(self.z_values).reshape(self.current_map.info.height, self.current_map.info.width)
             pose.position.z = z_values[int(p[1])][int(p[0])] + 0.4
 
             path_marker.points.append(pose.position)
