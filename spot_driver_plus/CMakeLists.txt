@@ -26,7 +26,7 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(interactive_markers REQUIRED)
 find_package(nav_msgs REQUIRED)
-find_package(hector_nav_msgs REQUIRED)
+find_package(world_info_msgs REQUIRED)
 find_package(control_msgs REQUIRED)
 find_package(controller_manager_msgs REQUIRED)
 find_package(moveit_msgs REQUIRED)
@@ -45,7 +45,7 @@ add_executable(spot_kinova_controller cpp/spot_kinova_controller.cpp)
 ament_target_dependencies(spot_kinova_controller rclcpp rclcpp_action sensor_msgs geometry_msgs std_srvs spot_msgs tf2 control_msgs controller_manager_msgs moveit_msgs)
 
 add_executable(map_vision cpp/map_vision.cpp)
-ament_target_dependencies(map_vision rclcpp geometry_msgs tf2 tf2_ros std_srvs hector_nav_msgs visualization_msgs nav_msgs tf2_geometry_msgs)
+ament_target_dependencies(map_vision rclcpp geometry_msgs tf2 tf2_ros std_srvs world_info_msgs visualization_msgs nav_msgs tf2_geometry_msgs)
 
 install(TARGETS
   battery_screen

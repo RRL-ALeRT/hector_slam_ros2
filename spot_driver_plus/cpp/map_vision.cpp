@@ -19,13 +19,13 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 #include <std_srvs/srv/empty.hpp>
-#include <hector_nav_msgs/srv/get_robot_trajectory.hpp>
+#include <world_info_msgs/srv/get_robot_trajectory.hpp>
 
 #include <visualization_msgs/msg/marker.hpp>
 
 using namespace std::chrono_literals;
 using Empty = std_srvs::srv::Empty;
-using GetRobotTrajectory = hector_nav_msgs::srv::GetRobotTrajectory;
+using GetRobotTrajectory = world_info_msgs::srv::GetRobotTrajectory;
 using namespace std::placeholders;
 
 geometry_msgs::msg::TransformStamped invertTransform(const geometry_msgs::msg::TransformStamped& input_transform) {

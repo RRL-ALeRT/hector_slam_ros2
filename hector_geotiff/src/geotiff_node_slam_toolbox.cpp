@@ -43,7 +43,7 @@
 #include <geometry_msgs/msg/quaternion.hpp>
 #include <nav_msgs/srv/get_map.hpp>
 #include <std_msgs/msg/string.hpp>
-#include <hector_nav_msgs/srv/get_robot_trajectory.hpp>
+#include <world_info_msgs/srv/get_robot_trajectory.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 #include "world_info_msgs/msg/world_info_array.hpp"
 
@@ -336,7 +336,7 @@ public:
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
   rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr trajectory_sub_;
   rclcpp::Client<nav_msgs::srv::GetMap>::SharedPtr map_service_client_;
-  rclcpp::Client<hector_nav_msgs::srv::GetRobotTrajectory>::SharedPtr path_service_client_;
+  rclcpp::Client<world_info_msgs::srv::GetRobotTrajectory>::SharedPtr path_service_client_;
   rclcpp::TimerBase::SharedPtr map_save_timer_;
   world_info_msgs::msg::WorldInfoArray wi_array;
 

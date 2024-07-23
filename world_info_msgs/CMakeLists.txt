@@ -12,6 +12,7 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/WorldInfo.msg"
@@ -23,7 +24,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Keypoints.msg"
   "msg/KeypointsArray.msg"
   "srv/GetMedianDepthXYZ.srv"
-  DEPENDENCIES builtin_interfaces geometry_msgs std_msgs visualization_msgs
+  "srv/GetRobotTrajectory.srv"
+  DEPENDENCIES builtin_interfaces geometry_msgs std_msgs visualization_msgs nav_msgs
 )
 
 ament_export_dependencies(rosidl_default_runtime)

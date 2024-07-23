@@ -37,12 +37,12 @@
 #include <world_info_msgs/msg/world_info_array.hpp>
 #include <tf2/utils.h>
 #include <geometry_msgs/msg/pose_stamped.hpp>
-#include <hector_nav_msgs/srv/get_robot_trajectory.hpp>
+#include <world_info_msgs/srv/get_robot_trajectory.hpp>
 
 #include <QApplication>
 
 using namespace std::chrono_literals;
-using GetRT = hector_nav_msgs::srv::GetRobotTrajectory;
+using GetRT = world_info_msgs::srv::GetRobotTrajectory;
 
 class GeotiffSaver
 {

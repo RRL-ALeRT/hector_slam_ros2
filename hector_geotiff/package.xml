@@ -31,7 +31,6 @@
   <build_export_depend>qtbase5-dev</build_export_depend>
   <exec_depend>qt5-image-formats-plugins</exec_depend>
   <depend>hector_map_tools</depend>
-  <depend>hector_nav_msgs</depend>
   <depend>libqt5-widgets</depend>
   <depend>nav_msgs</depend>
   <depend>pluginlib</depend>
