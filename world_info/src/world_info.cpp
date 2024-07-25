@@ -184,7 +184,7 @@ public:
       for (const auto& it: tag_vector->second)
       {
         if (SINGLE_OBJECT_OF_EACH_TYPE) {
-          bool tag_found = false;
+          bool better_tag_found = false;
 
           for (auto wi_it = wi_vector.array.begin(); wi_it != wi_vector.array.end(); ++wi_it)
           {
@@ -196,13 +196,13 @@ public:
               }
               else 
               {
-                tag_found = true;
+                better_tag_found = true;
               }
               break;
             }
           }
 
-          if (tag_found) continue;
+          if (better_tag_found) continue;
         }
 
         uint32_t shape = visualization_msgs::msg::Marker::CUBE;
