@@ -42,7 +42,7 @@
 #include <geometry_msgs/msg/quaternion.hpp>
 #include <nav_msgs/srv/get_map.hpp>
 #include <std_msgs/msg/string.hpp>
-#include <hector_nav_msgs/srv/get_robot_trajectory.hpp>
+#include <world_info_msgs/srv/get_robot_trajectory.hpp>
 #include "world_info_msgs/msg/world_info_array.hpp"
 
 #include <QApplication>
@@ -75,7 +75,7 @@ public:
 
     map_service_client_ = node_->create_client<nav_msgs::srv::GetMap>("dynamic_map");
     //object_service_client_ = n_.serviceClient<worldmodel_msgs::GetObjectModel>("worldmodel/get_object_model");
-    path_service_client_ = node_->create_client<hector_nav_msgs::srv::GetRobotTrajectory>("trajectory");
+    path_service_client_ = node_->create_client<world_info_msgs::srv::GetRobotTrajectory>("trajectory");
 
     auto p_geotiff_save_period = node_->declare_parameter("geotiff_save_period", 30.0);
 
@@ -150,14 +150,14 @@ public:
       }
       RCLCPP_INFO(node_->get_logger(), "path service not available, waiting again...");
     }
-    auto request = std::make_shared<hector_nav_msgs::srv::GetRobotTrajectory::Request>();
+    auto request = std::make_shared<world_info_msgs::srv::GetRobotTrajectory::Request>();
 
     // We give the async_send_request() method a callback that will get executed once the response
     // is received.
     // This way we can return immediately from this method and allow other work to be done by the
     // executor in `spin` while waiting for the response.
     using ServiceResponseFuture =
-      rclcpp::Client<hector_nav_msgs::srv::GetRobotTrajectory>::SharedFuture;
+      rclcpp::Client<world_info_msgs::srv::GetRobotTrajectory>::SharedFuture;
     auto response_received_callback = [this](ServiceResponseFuture future) {
         auto result = future.get();
         path = result.get()->trajectory.poses;
@@ -326,7 +326,7 @@ public:
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sys_cmd_sub_;
   rclcpp::Subscription<world_info_msgs::msg::WorldInfoArray>::SharedPtr world_info_sub_;
   rclcpp::Client<nav_msgs::srv::GetMap>::SharedPtr map_service_client_;
-  rclcpp::Client<hector_nav_msgs::srv::GetRobotTrajectory>::SharedPtr path_service_client_;
+  rclcpp::Client<world_info_msgs::srv::GetRobotTrajectory>::SharedPtr path_service_client_;
   rclcpp::TimerBase::SharedPtr map_save_timer_;
   world_info_msgs::msg::WorldInfoArray wi_array;
 

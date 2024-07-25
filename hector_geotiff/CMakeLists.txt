@@ -13,7 +13,6 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(hector_map_tools REQUIRED)
-find_package(hector_nav_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
@@ -42,19 +41,15 @@ ament_target_dependencies(geotiff_writer rclcpp nav_msgs hector_map_tools ament_
 
 add_executable(geotiff_saver src/geotiff_saver.cpp)
 target_link_libraries(geotiff_saver geotiff_writer)
-ament_target_dependencies(geotiff_saver rclcpp nav_msgs visualization_msgs world_info_msgs tf2 hector_nav_msgs)
+ament_target_dependencies(geotiff_saver rclcpp nav_msgs visualization_msgs world_info_msgs tf2 world_info_msgs)
 
 add_executable(geotiff_node src/geotiff_node.cpp)
 target_link_libraries(geotiff_node geotiff_writer)
-ament_target_dependencies(geotiff_node rclcpp pluginlib hector_nav_msgs world_info_msgs)
-
-add_executable(geotiff_node_cartographer src/geotiff_node_cartographer.cpp)
-target_link_libraries(geotiff_node_cartographer geotiff_writer)
-ament_target_dependencies(geotiff_node_cartographer rclcpp pluginlib hector_nav_msgs world_info_msgs visualization_msgs)
+ament_target_dependencies(geotiff_node rclcpp pluginlib world_info_msgs world_info_msgs)
 
 add_executable(geotiff_node_slam_toolbox src/geotiff_node_slam_toolbox.cpp)
 target_link_libraries(geotiff_node_slam_toolbox geotiff_writer)
-ament_target_dependencies(geotiff_node_slam_toolbox rclcpp pluginlib hector_nav_msgs world_info_msgs visualization_msgs tf2)
+ament_target_dependencies(geotiff_node_slam_toolbox rclcpp pluginlib world_info_msgs world_info_msgs visualization_msgs tf2)
 
 #############
 ## Install ##
@@ -76,7 +71,6 @@ install(DIRECTORY fonts
 install(TARGETS
   geotiff_writer
   geotiff_saver
-  geotiff_node_cartographer
   geotiff_node_slam_toolbox
   geotiff_node
   DESTINATION lib/${PROJECT_NAME})
