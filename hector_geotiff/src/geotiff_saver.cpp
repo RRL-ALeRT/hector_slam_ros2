@@ -155,7 +155,7 @@ class GeotiffSaver
         geotiff_writer.drawPath(startVec, pointVec, 120, 0, 140);
       }
 
-      int k = 0;
+      unsigned int k = 0;
       for (auto wi: wi_array.array) {
         if (wi.type == "hazmat" && wi.pose.position.z == 1.0)
         {
@@ -176,6 +176,7 @@ class GeotiffSaver
         k++;
       }
       //////////////////////////////// object
+      k = 0;
       for (auto wi: wi_array.array) {
         if (wi.type == "object" && wi.pose.position.z == 1.0) {
           geotiff_writer.drawObjectOfInterest(Eigen::Vector2f(
@@ -216,7 +217,7 @@ class GeotiffSaver
         geotiff_writer.drawPath(startVec, pointVec, 120, 0, 140);
       }
 
-      int k = 0;
+      unsigned int k = 0;
       for (auto wi: wi_array.array) {
         if (wi.type == "hazmat" &&  wi.pose.position.z == 2.0)
         {
@@ -237,6 +238,8 @@ class GeotiffSaver
         k++;
       }
       /////////////object
+
+      k = 0;
       for (auto wi: wi_array.array) {
         if (wi.type == "object" && wi.pose.position.z == 2.0) {
           geotiff_writer.drawObjectOfInterest(Eigen::Vector2f(
@@ -285,7 +288,7 @@ class GeotiffSaver
         final_world_data[wi_array.id_array[i]] = "\n" +
                               std::to_string(wi_array.id_array[i]) + "," +
                               wi_array.time_array[i] + "," +
-                              wi_array.array[i].num + "," +
+                              wi_array.array[i].name + "," +
                               std::to_string(wi_array.array[i].pose.position.x) + "," +
                               std::to_string(wi_array.array[i].pose.position.y) + "," +
                               std::to_string(wi_array.array[i].pose.position.z) + "," +

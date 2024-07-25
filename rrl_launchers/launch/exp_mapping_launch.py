@@ -10,6 +10,7 @@ def generate_launch_description():
         package="world_info",
         executable="world_info",
         output="screen",
+        parameters=[{"single_object_of_each_type": True}],
     )
     launch_list.append(world_info)
 

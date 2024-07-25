@@ -40,9 +40,6 @@ EXECUTABLE aruco_node)
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME})
 
-install(DIRECTORY weights
-  DESTINATION share/${PROJECT_NAME})
-
 install(TARGETS
   aruco
   ARCHIVE DESTINATION lib

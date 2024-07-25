@@ -136,7 +136,7 @@ class DetectAruco : public rclcpp::Node
         world_info_msgs::msg::WorldInfo world_info_msg;
 
         world_info_msg.header.stamp = msg_img->header.stamp;
-        world_info_msg.num = std::to_string(ids[i]);
+        world_info_msg.name = std::to_string(ids[i]);
         world_info_msg.type = "aruco";
         world_info_msg.pose.position.x = tf_msg.transform.translation.x;
         world_info_msg.pose.position.y = tf_msg.transform.translation.y;

@@ -133,9 +133,6 @@ private:
 
       // Set the transform message fields
       tf_msg.child_frame_id = boundingbox.name;
-      // tf_msg.transform.translation.x = z;
-      // tf_msg.transform.translation.y = -x;
-      // tf_msg.transform.translation.z = -y;
       tf_msg.transform.translation.x = x;
       tf_msg.transform.translation.y = y;
       tf_msg.transform.translation.z = z;
@@ -147,11 +144,12 @@ private:
       world_info_msgs::msg::WorldInfo world_info_msg;
 
       world_info_msg.header = msg->header;
-      world_info_msg.num = boundingbox.name;
+      world_info_msg.name = boundingbox.name;
       world_info_msg.pose.position.x = tf_msg.transform.translation.x;
       world_info_msg.pose.position.y = tf_msg.transform.translation.y;
       world_info_msg.pose.position.z = tf_msg.transform.translation.z;
       world_info_msg.type = msg->type;
+      world_info_msg.confidence = boundingbox.confidence;
 
       // Publish the WorldInfo message
       world_info_pub_->publish(world_info_msg);

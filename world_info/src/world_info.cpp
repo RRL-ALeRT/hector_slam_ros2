@@ -17,7 +17,7 @@ using Empty = std_srvs::srv::Empty;
 using namespace std::placeholders;
 using namespace std::chrono_literals;
 
-void add_to_mean(geometry_msgs::msg::Pose& mean, const geometry_msgs::msg::Pose newPose, int& numPoses)
+void add_to_mean(geometry_msgs::msg::Pose& mean, double& confidence, const double new_confidence, const geometry_msgs::msg::Pose newPose, int& numPoses)
 {
   // Update position mean
   mean.position.x = (mean.position.x * numPoses + newPose.position.x) / (numPoses + 1);
@@ -40,6 +40,8 @@ void add_to_mean(geometry_msgs::msg::Pose& mean, const geometry_msgs::msg::Pose 
   mean.orientation.y /= norm;
   mean.orientation.z /= norm;
   mean.orientation.w /= norm;
+
+  confidence = (confidence * numPoses + new_confidence) / (numPoses + 1);
 
   numPoses++;
 }
@@ -77,7 +79,9 @@ public:
     wi_pub = create_publisher<world_info_msgs::msg::WorldInfoArray>("/world_info_array", 1);
     markers_pub = create_publisher<visualization_msgs::msg::MarkerArray>("/visualization_marker_array", 1);
 
-    reset_world = create_service<Empty>("reset_world_info", std::bind(&WorldInfo::reset_world_cb, this, _1, _2, _3));
+    if (!has_parameter("single_object_of_each_type"))
+      declare_parameter("single_object_of_each_type", SINGLE_OBJECT_OF_EACH_TYPE);
+    get_parameter("single_object_of_each_type", SINGLE_OBJECT_OF_EACH_TYPE);
 
     // Call on_timer function every second
     timer_ = create_wall_timer(1s, std::bind(&WorldInfo::on_timer, this));
@@ -90,16 +94,6 @@ public:
   {
     if (wi_vector.array.size() > 0)
       wi_pub->publish(wi_vector);
-  }
-
-  void reset_world_cb(
-    const std::shared_ptr<rmw_request_id_t> request_header,
-    const std::shared_ptr<Empty::Request> request,
-    const std::shared_ptr<Empty::Response> response)
-  {
-    (void)request_header;
-    tag_collection.clear();
-    RCLCPP_INFO(get_logger(), "world_info resetted");
   }
 
   void transform_pose(world_info_msgs::msg::WorldInfo& in, std::string target_frame)
@@ -154,7 +148,7 @@ public:
       return;
     }
 
-    std::string tag_name = msg->type + "_" + msg->num;
+    std::string tag_name = msg->type + "_" + msg->name;
 
     bool tag_found = false;
     if (tag_collection.find(tag_name) != tag_collection.end())
@@ -165,7 +159,7 @@ public:
         {
           if (tag.count <= 100)
           {
-            add_to_mean(tag.info.pose, msg->pose, tag.count);
+            add_to_mean(tag.info.pose, tag.info.confidence, msg->confidence, msg->pose, tag.count);
           }
           tag_found = true;
           break;
@@ -175,8 +169,7 @@ public:
     if (!tag_found)
     {
       PoseCount tag_dict;
-      tag_dict = PoseCount{*msg, 1, id_count, time_str, std::string("Spot"), std::string("A")}; // First time
-      id_count++;
+      tag_dict = PoseCount{*msg, 1, msg->confidence, time_str, std::string("Spot"), std::string("A")}; // First time
       tag_collection[tag_name].push_back(tag_dict);
     }
 
@@ -184,10 +177,34 @@ public:
     marker_array = empty_marker_array;
     wi_vector = empty_wi_vector;
 
+    int id_count = 0;
+
     for (auto tag_vector = tag_collection.begin(); tag_vector != tag_collection.end(); ++tag_vector)
     {
       for (const auto& it: tag_vector->second)
       {
+        if (SINGLE_OBJECT_OF_EACH_TYPE) {
+          bool tag_found = false;
+
+          for (auto wi_it = wi_vector.array.begin(); wi_it != wi_vector.array.end(); ++wi_it)
+          {
+            if (wi_it->name == it.info.name)
+            {
+              if (it.info.confidence >= wi_it->confidence)
+              {
+                wi_vector.array.erase(wi_it);
+              }
+              else 
+              {
+                tag_found = true;
+              }
+              break;
+            }
+          }
+
+          if (tag_found) continue;
+        }
+
         uint32_t shape = visualization_msgs::msg::Marker::CUBE;
         visualization_msgs::msg::Marker marker;
         marker.header = it.info.header;
@@ -212,7 +229,7 @@ public:
         marker_array.markers.push_back(marker);
 
         wi_vector.array.push_back(modified_info);
-        wi_vector.id_array.push_back(it.id);
+        wi_vector.id_array.push_back(id_count++);
         wi_vector.time_array.push_back(it.time);
         wi_vector.robot_array.push_back(it.robot);
         wi_vector.mode_array.push_back(it.mode);
@@ -229,21 +246,19 @@ public:
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_pub;
   rclcpp::TimerBase::SharedPtr timer_{nullptr};
 
-  rclcpp::Service<Empty>::SharedPtr reset_world;
-
   visualization_msgs::msg::MarkerArray marker_array, empty_marker_array;
   world_info_msgs::msg::WorldInfoArray wi_vector, empty_wi_vector;
 
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
 
-  int id_count = 0;
+  bool SINGLE_OBJECT_OF_EACH_TYPE = false;
 
   struct PoseCount
   {
     world_info_msgs::msg::WorldInfo info;
     int count;
-    int id;
+    double confidence;
     std::string time;
     std::string robot;
     std::string mode;

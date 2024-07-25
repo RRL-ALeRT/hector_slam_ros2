@@ -43,14 +43,6 @@ add_executable(geotiff_saver src/geotiff_saver.cpp)
 target_link_libraries(geotiff_saver geotiff_writer)
 ament_target_dependencies(geotiff_saver rclcpp nav_msgs visualization_msgs world_info_msgs tf2 world_info_msgs)
 
-add_executable(geotiff_node src/geotiff_node.cpp)
-target_link_libraries(geotiff_node geotiff_writer)
-ament_target_dependencies(geotiff_node rclcpp pluginlib world_info_msgs world_info_msgs)
-
-add_executable(geotiff_node_slam_toolbox src/geotiff_node_slam_toolbox.cpp)
-target_link_libraries(geotiff_node_slam_toolbox geotiff_writer)
-ament_target_dependencies(geotiff_node_slam_toolbox rclcpp pluginlib world_info_msgs world_info_msgs visualization_msgs tf2)
-
 #############
 ## Install ##
 #############
@@ -71,8 +63,6 @@ install(DIRECTORY fonts
 install(TARGETS
   geotiff_writer
   geotiff_saver
-  geotiff_node_slam_toolbox
-  geotiff_node
   DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
