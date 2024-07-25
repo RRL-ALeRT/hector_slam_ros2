@@ -24,18 +24,17 @@ def generate_launch_description():
         package="spot_driver_plus",
         executable="rrl_yolov8_openvino.py",
         output="screen",
-        parameters=[{"model", "hazmat"}],
+        parameters=[{"model": "hazmat"}],
     )
     launch_list.append(hazmat_node)
 
-    # object_node = Node(
-    #     package="spot_driver_plus",
-    #     executable="rrl_yolov8_openvino.py",
-    #     output="screen",
-    #     parameters=[{"model", "object"}],
-    # )
-    # launch_list.append(object_node)
-
+    object_node = Node(
+        package="spot_driver_plus",
+        executable="rrl_yolov8_openvino.py",
+        output="screen",
+        parameters=[{"model": "object"}],
+    )
+    launch_list.append(object_node)
 
     tf2_rs_front = ExecuteProcess(
                         cmd=['ros2', 'run', 'world_info', 'tf2_object_detection_yolov5', '/rs_front/aligned_depth_to_color/image_raw', '/rs_front/aligned_depth_to_color/camera_info'],

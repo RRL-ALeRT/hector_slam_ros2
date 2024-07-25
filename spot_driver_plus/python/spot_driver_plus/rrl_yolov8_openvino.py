@@ -4,7 +4,6 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
-import cv2
 from world_info_msgs.msg import BoundingBox, BoundingBoxArray
 from ultralytics import YOLO
 from ament_index_python.packages import get_package_share_directory
@@ -63,7 +62,7 @@ class ObjectDetector(Node):
             bb_msg = BoundingBox()
             bb_msg.name = result.names[result.boxes.cls.cpu()[0].item()]
             confidence = float(result.boxes.conf.cpu()[0].item())
-            if confidence < 0.85:
+            if confidence < 0.8:
                 continue
             bb_msg.confidence = confidence
             bb_msg.width = float(width)
@@ -77,12 +76,14 @@ class ObjectDetector(Node):
         self.bounding_box_pubs_dict[msg.header.frame_id].publish(bb_array_msg)
         self.depth_bounding_box_pubs_dict[msg.header.frame_id].publish(bb_array_msg)
 
+
 def main(args=None):
     rclpy.init(args=args)
     object_detector = ObjectDetector()
     rclpy.spin(object_detector)
     object_detector.destroy_node()
     rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()

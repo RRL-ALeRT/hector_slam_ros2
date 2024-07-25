@@ -26,6 +26,7 @@ find_package(image_transport REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(hector_nav_msgs REQUIRED)
+find_package(webots_spot_msgs REQUIRED)
 
 add_executable(world_info src/world_info.cpp)
 ament_target_dependencies(world_info rclcpp world_info_msgs tf2_ros tf2_geometry_msgs std_srvs hector_nav_msgs)
@@ -43,7 +44,7 @@ ament_target_dependencies(qrcode rclcpp rclcpp_components world_info_msgs sensor
 target_link_libraries(qrcode ${ZBAR_LIBRARIES} zbar)
 
 add_library(aruco SHARED src/aruco.cpp)
-ament_target_dependencies(aruco rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport Eigen3 OpenCV cv_bridge tf2_ros)
+ament_target_dependencies(aruco rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport Eigen3 OpenCV cv_bridge tf2_ros webots_spot_msgs)
 rclcpp_components_register_node(aruco
 PLUGIN "world_info::DetectAruco"
 EXECUTABLE aruco_node)

@@ -94,7 +94,7 @@ class MotionDetectorAdaptative(Node):
             self.draw_box_pub.publish(draw_box_array)
 
     def processImage(self, frame):
-        cv2.GaussianBlur(frame, (21, 21), 0)
+        frame = cv2.GaussianBlur(frame, (3, 3), 0)
 
         if self.absdiff_frame is None:  # For the first time put values in difference, temp and moving_average
             self.absdiff_frame = frame.copy()
