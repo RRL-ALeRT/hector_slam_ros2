@@ -32,7 +32,7 @@ add_executable(tf2_object_detection_yolov5 src/tf2_object_detection_yolov5.cpp)
 ament_target_dependencies(tf2_object_detection_yolov5 rclcpp sensor_msgs image_transport OpenCV cv_bridge world_info_msgs tf2_ros)
 
 add_library(aruco SHARED src/aruco.cpp)
-ament_target_dependencies(aruco rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport Eigen3 OpenCV cv_bridge tf2_ros webots_spot_msgs)
+ament_target_dependencies(aruco rclcpp rclcpp_components world_info_msgs sensor_msgs image_transport Eigen3 OpenCV cv_bridge tf2_ros)
 rclcpp_components_register_node(aruco
 PLUGIN "world_info::DetectAruco"
 EXECUTABLE aruco_node)
